@@ -1,0 +1,22 @@
+use crate::ast::*;
+
+grammar;
+
+pub(crate) Program = Declaration*;
+
+Declaration = {
+    Statement,
+    //TODO others
+};
+
+Statement = {
+    ExprStmt,
+    //TODO others
+};
+
+ExprStmt: Stmt = <Expression> ";" => Stmt::Expr(<>);
+
+Expression: Expr = {
+    "nil" => Expr::Nil,
+    //TODO others
+};
