@@ -11,20 +11,31 @@ use {
 
 #[derive(From, Trace, Finalize)]
 pub(crate) enum Value {
-    Closure(Gc<Closure>),
     Nil,
+    Bool(bool),
+    Closure(Gc<Closure>),
 }
 
 impl Value {
     pub(crate) fn new(value: impl Into<Value>) -> Gc<Value> { Gc::new(value.into()) }
     pub(crate) fn nil() -> Gc<Value> { Gc::new(Value::Nil) }
+
+    pub(crate) fn as_bool(&self) -> bool {
+        match *self {
+            Value::Nil => false,
+            Value::Bool(b) => b,
+            _ => true,
+        }
+    }
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Closure(closure) => closure.fmt(f),
             Value::Nil => write!(f, "nil"),
+            Value::Bool(true) => write!(f, "true"),
+            Value::Bool(false) => write!(f, "false"),
+            Value::Closure(closure) => closure.fmt(f),
         }
     }
 }

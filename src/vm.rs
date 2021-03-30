@@ -16,11 +16,15 @@ use {
 
 #[repr(u8)]
 pub(crate) enum OpCode {
+    False,
     GetLocal,
+    Neg,
     Nil,
+    Not,
     Pop,
     Print,
     Return,
+    True,
 }
 
 struct CallFrame {
@@ -46,11 +50,11 @@ impl Vm {
         let closure = Closure::new(function.wrap());
         self.push(Value::new(closure.clone()));
         self.call(closure, 0)?;
-        self.run();
+        self.run()?;
         Ok(())
     }
 
-    fn run(&mut self) {
+    fn run(&mut self) -> Result {
         macro_rules! frame {
             () => {
                 &mut self.frames.last_mut().expect("call frame stack empty")
@@ -69,12 +73,18 @@ impl Vm {
         loop {
             let instruction = unsafe { mem::transmute::<u8, OpCode>(read_byte!()) };
             match instruction {
+                OpCode::False => self.push(Value::new(false)),
                 OpCode::GetLocal => {
                     let slot = read_byte!();
                     let local = self.stack[frame!().slots_start + usize::from(slot)].clone();
                     self.push(local);
                 }
+                OpCode::Neg => return Err(Error::Runtime(format!("Operand must be a number."))), //TODO handle numbers
                 OpCode::Nil => self.push(Value::nil()),
+                OpCode::Not => {
+                    let operand = self.pop();
+                    self.push(Value::new(!operand.as_bool()));
+                }
                 OpCode::Pop => { let _ = self.pop(); }
                 OpCode::Print => println!("{}", self.pop()),
                 OpCode::Return => {
@@ -83,11 +93,12 @@ impl Vm {
                     let _ = self.frames.pop();
                     if self.frames.is_empty() {
                         let _ = self.pop();
-                        return
+                        return Ok(())
                     }
                     self.stack.truncate(frame!().slots_start);
                     self.push(result);
                 }
+                OpCode::True => self.push(Value::new(true)),
             }
         }
     }

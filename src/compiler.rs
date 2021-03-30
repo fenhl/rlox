@@ -1,9 +1,6 @@
 use {
     crate::{
-        ast::{
-            Expr,
-            Stmt,
-        },
+        ast::*,
         value::FunctionInner,
         vm::OpCode,
     },
@@ -31,6 +28,15 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: Expr) {
         match expr {
+            Expr::Unary(op, inner) => {
+                self.compile_expr(*inner);
+                self.emit(match op {
+                    UnaryOp::Not => OpCode::Not,
+                    UnaryOp::Neg => OpCode::Neg,
+                });
+            }
+            Expr::True => self.emit(OpCode::True),
+            Expr::False => self.emit(OpCode::False),
             Expr::Nil => self.emit(OpCode::Nil),
         }
     }

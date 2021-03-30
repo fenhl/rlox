@@ -16,6 +16,14 @@ Statement: Stmt = {
 };
 
 Expression: Expr = {
+    <op:UnaryOp> <expr:Expression> => Expr::Unary(op, Box::new(expr)),
+    "true" => Expr::True,
+    "false" => Expr::False,
     "nil" => Expr::Nil,
     //TODO others
+};
+
+UnaryOp: UnaryOp = {
+    "!" => UnaryOp::Not,
+    "-" => UnaryOp::Neg,
 };
