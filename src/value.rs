@@ -1,4 +1,5 @@
 use {
+    std::fmt,
     derive_more::From,
     gc::{
         Finalize,
@@ -19,6 +20,15 @@ impl Value {
     pub(crate) fn nil() -> Gc<Value> { Gc::new(Value::Nil) }
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Closure(closure) => closure.fmt(f),
+            Value::Nil => write!(f, "nil"),
+        }
+    }
+}
+
 #[derive(Trace, Finalize)]
 pub(crate) struct Closure {
     pub(crate) function: Function,
@@ -27,6 +37,12 @@ pub(crate) struct Closure {
 impl Closure {
     pub(crate) fn new(function: Function) -> Gc<Closure> {
         Gc::new(Closure { function })
+    }
+}
+
+impl fmt::Display for Closure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.function.borrow().fmt(f)
     }
 }
 
@@ -39,6 +55,12 @@ pub(crate) struct FunctionInner {
 impl FunctionInner {
     pub(crate) fn wrap(self) -> Function {
         Gc::new(GcCell::new(self))
+    }
+}
+
+impl fmt::Display for FunctionInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<script>") //TODO print function name if any
     }
 }
 

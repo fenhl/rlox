@@ -41,6 +41,10 @@ impl Compiler {
                 self.compile_expr(expr);
                 self.emit(OpCode::Pop);
             }
+            Stmt::Print(expr) => {
+                self.compile_expr(expr);
+                self.emit(OpCode::Print);
+            }
         }
     }
 

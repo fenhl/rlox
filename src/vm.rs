@@ -19,6 +19,7 @@ pub(crate) enum OpCode {
     GetLocal,
     Nil,
     Pop,
+    Print,
     Return,
 }
 
@@ -75,6 +76,7 @@ impl Vm {
                 }
                 OpCode::Nil => self.push(Value::nil()),
                 OpCode::Pop => { let _ = self.pop(); }
+                OpCode::Print => println!("{}", self.pop()),
                 OpCode::Return => {
                     let result = self.pop();
                     //TODO close upvalues

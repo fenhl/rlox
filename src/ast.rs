@@ -1,5 +1,6 @@
 pub(crate) enum Stmt {
     Expr(Expr),
+    Print(Expr),
     //TODO others
 }
 

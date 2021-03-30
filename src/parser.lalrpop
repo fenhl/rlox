@@ -9,12 +9,11 @@ Declaration = {
     //TODO others
 };
 
-Statement = {
-    ExprStmt,
+Statement: Stmt = {
+    <Expression> ";" => Stmt::Expr(<>),
+    "print" <Expression> ";" => Stmt::Print(<>),
     //TODO others
 };
-
-ExprStmt: Stmt = <Expression> ";" => Stmt::Expr(<>);
 
 Expression: Expr = {
     "nil" => Expr::Nil,
