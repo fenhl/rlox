@@ -67,6 +67,7 @@ impl Compiler {
             Expr::False => self.emit(OpCode::False),
             Expr::Nil => self.emit(OpCode::Nil),
             Expr::Number(n) => self.emit_constant(Value::new(n))?,
+            Expr::String(s) => self.emit_constant(Value::new(s))?,
             Expr::Variable(name) => {
                 //TODO locals and upvalues
                 let arg = self.make_constant(Value::new(name))?;

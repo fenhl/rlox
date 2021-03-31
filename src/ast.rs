@@ -12,6 +12,7 @@ pub(crate) enum Expr {
     False,
     Nil,
     Number(f64),
+    String(String),
     Variable(String),
     //TODO others
 }

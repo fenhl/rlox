@@ -101,7 +101,7 @@ impl Vm {
                     let rhs = self.pop();
                     let lhs = self.pop();
                     self.push(match (&*lhs, &*rhs) {
-                        (Value::String(_), Value::String(_)) => unimplemented!(), //TODO string concatenation
+                        (Value::String(lhs), Value::String(rhs)) => Value::new(format!("{}{}", lhs, rhs)),
                         (Value::Number(lhs), Value::Number(rhs)) => Value::new(lhs + rhs),
                         (_, _) => return Err(Error::Runtime(format!("Operands must be two numbers or two strings."))),
                     });

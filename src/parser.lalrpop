@@ -122,7 +122,10 @@ Unary = {
     NIL => Expr::Nil,
     //TODO this
     NUMBER =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
-    //TODO string
+    STRING => {
+        let quoted = <>;
+        Expr::String(quoted[1..quoted.len() - 1].to_owned())
+    },
     IDENTIFIER => Expr::Variable(<>.to_owned()),
     LEFT_PAREN <Expression> RIGHT_PAREN,
     //TODO super
