@@ -6,6 +6,49 @@ use {
 
 grammar;
 
+match {
+    r"[\t\n\r ]*" => {},
+    r"//[^\n\r]*[\n\r]*" => {},
+    "and" => AND,
+    "class" => CLASS,
+    "else" => ELSE,
+    "false" => FALSE,
+    "for" => FOR,
+    "fun" => FUN,
+    "if" => IF,
+    "nil" => NIL,
+    "or" => OR,
+    "print" => PRINT,
+    "return" => RETURN,
+    "super" => SUPER,
+    "this" => THIS,
+    "true" => TRUE,
+    "var" => VAR,
+    "while" => WHILE,
+    r"[A-Z_a-z][0-9A-Z_a-z]*" => IDENTIFIER,
+    r"[0-9]+(?:.[0-9]+)?" => NUMBER,
+    "(" => LEFT_PAREN,
+    ")" => RIGHT_PAREN,
+    "{" => LEFT_BRACE,
+    "}" => RIGHT_BRACE,
+    ";" => SEMICOLON,
+    "," => COMMA,
+    "." => DOT,
+    "-" => MINUS,
+    "+" => PLUS,
+    "/" => SLASH,
+    "*" => STAR,
+    "!=" => BANG_EQUAL,
+    "!" => BANG,
+    "==" => EQUAL_EQUAL,
+    "=" => EQUAL,
+    "<=" => LESS_EQUAL,
+    "<" => LESS,
+    ">=" => GREATER_EQUAL,
+    ">" => GREATER,
+    r#""[^"]*""# => STRING,
+}
+
 extern {
     type Error = crate::error::Error;
 }
@@ -18,8 +61,8 @@ Declaration = {
 };
 
 Statement: Stmt = {
-    <Expression> ";" => Stmt::Expr(<>),
-    "print" <Expression> ";" => Stmt::Print(<>),
+    <Expression> SEMICOLON => Stmt::Expr(<>),
+    PRINT <Expression> SEMICOLON => Stmt::Print(<>),
     //TODO others
 };
 
@@ -29,21 +72,21 @@ Expression: Expr = {
 };
 
 EqOp: BinaryOp = {
-    "!=" => BinaryOp::NotEqual,
-    "==" => BinaryOp::Equal,
+    BANG_EQUAL => BinaryOp::NotEqual,
+    EQUAL_EQUAL => BinaryOp::Equal,
 };
 
 Unary = {
     <op:UnaryOp> <expr:Unary> => Expr::Unary(op, Box::new(expr)),
-    "true" => Expr::True,
-    "false" => Expr::False,
-    "nil" => Expr::Nil,
-    r"[0-9]+(?:.[0-9]+)?" =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
-    "(" <Expression> ")",
+    TRUE => Expr::True,
+    FALSE => Expr::False,
+    NIL => Expr::Nil,
+    NUMBER =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
+    LEFT_PAREN <Expression> RIGHT_PAREN,
     //TODO others
 };
 
 UnaryOp: UnaryOp = {
-    "!" => UnaryOp::Not,
-    "-" => UnaryOp::Neg,
+    BANG => UnaryOp::Not,
+    MINUS => UnaryOp::Neg,
 };
