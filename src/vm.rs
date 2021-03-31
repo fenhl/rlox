@@ -27,6 +27,10 @@ pub(crate) enum OpCode {
     False,
     GetGlobal,
     GetLocal,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
     Mul,
     Neg,
     Nil,
@@ -131,6 +135,26 @@ impl Vm {
                     let slot = read_byte!();
                     let local = self.stack[frame!().slots_start + usize::from(slot)].clone();
                     self.push(local);
+                }
+                OpCode::Greater => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs > rhs));
+                }
+                OpCode::GreaterEqual => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs >= rhs));
+                }
+                OpCode::Less => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs < rhs));
+                }
+                OpCode::LessEqual => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs <= rhs));
                 }
                 OpCode::Mul => {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;

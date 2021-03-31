@@ -46,6 +46,10 @@ impl Compiler {
                         self.emit(OpCode::Not);
                     }
                     BinaryOp::Equal => self.emit(OpCode::Equal),
+                    BinaryOp::Greater => self.emit(OpCode::Greater),
+                    BinaryOp::GreaterEqual => self.emit(OpCode::GreaterEqual),
+                    BinaryOp::Less => self.emit(OpCode::Less),
+                    BinaryOp::LessEqual => self.emit(OpCode::LessEqual),
                     BinaryOp::Sub => self.emit(OpCode::Sub),
                     BinaryOp::Add => self.emit(OpCode::Add),
                     BinaryOp::Div => self.emit(OpCode::Div),

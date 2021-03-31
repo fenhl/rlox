@@ -56,25 +56,42 @@ extern {
 pub(crate) Program = Declaration*;
 
 Declaration = {
+    //TODO classDecl
+    //TODO funDecl
     VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> SEMICOLON => Stmt::Var(name.to_owned(), init),
     Statement,
-    //TODO others
 };
 
 Statement: Stmt = {
     <Expression> SEMICOLON => Stmt::Expr(<>),
+    //TODO forStmt
+    //TODO ifStmt
     PRINT <Expression> SEMICOLON => Stmt::Print(<>),
-    //TODO others
+    //TODO returnStmt
+    //TODO whileStmt
+    //TODO block
 };
 
-Expression: Expr = {
-    <lhs:Expression> <op:EqOp> <rhs:Term> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
-    Term,
+Expression: Expr = { //TODO assignment, logic_or, logic_and
+    <lhs:Expression> <op:EqOp> <rhs:Comparison> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    Comparison,
 };
 
 EqOp: BinaryOp = {
     BANG_EQUAL => BinaryOp::NotEqual,
     EQUAL_EQUAL => BinaryOp::Equal,
+};
+
+Comparison = {
+    <lhs:Comparison> <op:ComparisonOp> <rhs:Term> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    Term,
+};
+
+ComparisonOp: BinaryOp = {
+    GREATER => BinaryOp::Greater,
+    GREATER_EQUAL => BinaryOp::GreaterEqual,
+    LESS => BinaryOp::Less,
+    LESS_EQUAL => BinaryOp::LessEqual,
 };
 
 Term = {
@@ -99,13 +116,16 @@ FactorOp: BinaryOp = {
 
 Unary = {
     <op:UnaryOp> <expr:Unary> => Expr::Unary(op, Box::new(expr)),
+    //TODO call
     TRUE => Expr::True,
     FALSE => Expr::False,
     NIL => Expr::Nil,
+    //TODO this
     NUMBER =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
+    //TODO string
     IDENTIFIER => Expr::Variable(<>.to_owned()),
     LEFT_PAREN <Expression> RIGHT_PAREN,
-    //TODO others
+    //TODO super
 };
 
 UnaryOp: UnaryOp = {

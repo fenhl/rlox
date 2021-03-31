@@ -19,6 +19,10 @@ pub(crate) enum Expr {
 pub(crate) enum BinaryOp {
     NotEqual,
     Equal,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
     Sub,
     Add,
     Div,
