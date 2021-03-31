@@ -28,6 +28,8 @@ impl<'input> From<Token<'input>> for OwnedToken {
 #[derive(From)]
 pub enum Error {
     Compile(String),
+    CompileRepl,
+    Decode(&'static str),
     #[from]
     Io(io::Error),
     Parse(ParseError<usize, OwnedToken, Box<Error>>),
@@ -46,6 +48,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Compile(msg) => write!(f, "compile error: {}", msg),
+            Error::CompileRepl => write!(f, "invoking with --compile requires an input script"),
+            Error::Decode(ty) => write!(f, "invalid {} in bytecode", ty),
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Parse(e) => write!(f, "parse error: {}", e),
             Error::ParseFloat(e) => e.fmt(f),

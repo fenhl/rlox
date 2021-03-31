@@ -8,6 +8,7 @@ edition = "2018"
 lalrpop = "0.19"
 
 [dependencies]
+byteorder = "1"
 lalrpop-util = "0.19"
 regex = "1"
 
