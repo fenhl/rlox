@@ -6,6 +6,7 @@ pub(crate) enum Stmt {
 }
 
 pub(crate) enum Expr {
+    Assign(Option<Box<Expr>>, String, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
     True,

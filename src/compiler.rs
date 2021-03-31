@@ -37,6 +37,13 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: Expr) -> Result {
         match expr {
+            Expr::Assign(Some(_), _, _) => unimplemented!(), //TODO
+            Expr::Assign(None, name, value) => {
+                //TODO locals and upvalues
+                let arg = self.make_constant(Value::new(name))?;
+                self.compile_expr(*value)?;
+                self.emit_with_arg(OpCode::SetGlobal, arg);
+            }
             Expr::Binary(lhs, op, rhs) => {
                 self.compile_expr(*lhs)?;
                 self.compile_expr(*rhs)?;

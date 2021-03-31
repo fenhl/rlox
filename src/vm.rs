@@ -38,6 +38,7 @@ pub(crate) enum OpCode {
     Pop,
     Print,
     Return,
+    SetGlobal,
     Sub,
     True,
 }
@@ -183,6 +184,14 @@ impl Vm {
                     self.stack.truncate(frame!().slots_start);
                     self.push(result);
                 }
+                OpCode::SetGlobal => {
+                    let name = read_constant!().as_string().expect("global name was not a string");
+                    let value = self.peek(0).clone();
+                    if self.globals.insert(name.clone(), value).is_none() {
+                        self.globals.remove(&name);
+                        return Err(Error::Runtime(format!("Undefined variable '{}'.", name)))
+                    }
+                }
                 OpCode::Sub => {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
                     let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
@@ -207,11 +216,15 @@ impl Vm {
         Ok(())
     }
 
-    fn pop(&mut self) -> Gc<Value> {
-        self.stack.pop().expect("tried to pop from an empty VM stack")
-    }
-
     fn push(&mut self, value: Gc<Value>) {
         self.stack.push(value);
+    }
+
+    fn peek(&self, offset: usize) -> &Gc<Value> {
+        &self.stack[self.stack.len() - 1 - offset]
+    }
+
+    fn pop(&mut self) -> Gc<Value> {
+        self.stack.pop().expect("tried to pop from an empty VM stack")
     }
 }

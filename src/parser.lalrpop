@@ -72,12 +72,17 @@ Statement: Stmt = {
     //TODO block
 };
 
-Expression: Expr = { //TODO assignment, logic_or, logic_and
-    <lhs:Expression> <op:EqOp> <rhs:Comparison> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+Expression: Expr = {
+    <name:IDENTIFIER> EQUAL <value:Expression> => Expr::Assign(None, name.to_owned(), Box::new(value)), //TODO field assignment
+    Equality, //TODO logic_or, logic_and
+};
+
+Equality = {
+    <lhs:Equality> <op:EqualityOp> <rhs:Comparison> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
     Comparison,
 };
 
-EqOp: BinaryOp = {
+EqualityOp: BinaryOp = {
     BANG_EQUAL => BinaryOp::NotEqual,
     EQUAL_EQUAL => BinaryOp::Equal,
 };
