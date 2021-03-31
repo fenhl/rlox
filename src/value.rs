@@ -13,6 +13,7 @@ use {
 pub(crate) enum Value {
     Nil,
     Bool(bool),
+    Number(f64),
     Closure(Gc<Closure>),
 }
 
@@ -27,6 +28,10 @@ impl Value {
             _ => true,
         }
     }
+
+    pub(crate) fn as_number(&self) -> Option<f64> {
+        if let Value::Number(n) = *self { Some(n) } else { None }
+    }
 }
 
 impl fmt::Display for Value {
@@ -35,6 +40,7 @@ impl fmt::Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::Bool(true) => write!(f, "true"),
             Value::Bool(false) => write!(f, "false"),
+            Value::Number(n) => n.fmt(f),
             Value::Closure(closure) => closure.fmt(f),
         }
     }
@@ -45,8 +51,9 @@ impl PartialEq for Value {
         match (self, rhs) {
             (Value::Nil, Value::Nil) => true,
             (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
+            (Value::Number(lhs), Value::Number(rhs)) => lhs == rhs,
             (Value::Closure(lhs), Value::Closure(rhs)) => Gc::ptr_eq(lhs, rhs),
-            //TODO other cases (numbers, strings depending on interning, other kinds of objects)
+            //TODO other cases (strings depending on interning, other kinds of objects)
             (_, _) => false, // values of different types are never equal
         }
     }
@@ -73,11 +80,17 @@ impl fmt::Display for Closure {
 pub(crate) struct FunctionInner {
     pub(crate) arity: u8,
     pub(crate) chunk: Vec<u8>,
+    pub(crate) constants: Vec<Gc<Value>>,
 }
 
 impl FunctionInner {
     pub(crate) fn wrap(self) -> Function {
         Gc::new(GcCell::new(self))
+    }
+
+    pub(crate) fn add_constant(&mut self, value: Gc<Value>) -> usize {
+        self.constants.push(value);
+        self.constants.len() - 1
     }
 }
 

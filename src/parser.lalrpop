@@ -1,6 +1,14 @@
-use crate::ast::*;
+use {
+    std::str::FromStr as _,
+    lalrpop_util::ParseError,
+    crate::ast::*,
+};
 
 grammar;
+
+extern {
+    type Error = crate::error::Error;
+}
 
 pub(crate) Program = Declaration*;
 
@@ -30,6 +38,7 @@ Unary = {
     "true" => Expr::True,
     "false" => Expr::False,
     "nil" => Expr::Nil,
+    r"[0-9]+(?:.[0-9]+)?" =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
     "(" <Expression> ")",
     //TODO others
 };

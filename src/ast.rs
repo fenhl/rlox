@@ -10,6 +10,7 @@ pub(crate) enum Expr {
     True,
     False,
     Nil,
+    Number(f64),
     //TODO others
 }
 

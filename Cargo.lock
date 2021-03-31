@@ -475,6 +475,7 @@ dependencies = [
  "gc",
  "lalrpop",
  "lalrpop-util",
+ "regex",
  "structopt",
  "wheel",
 ]

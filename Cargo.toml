@@ -9,7 +9,7 @@ lalrpop = "0.19"
 
 [dependencies]
 lalrpop-util = "0.19"
-#regex = "1"
+regex = "1"
 
 [dependencies.derive_more]
 version = "0.99"

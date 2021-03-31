@@ -16,6 +16,7 @@ use {
 
 #[repr(u8)]
 pub(crate) enum OpCode {
+    Constant,
     Equal,
     False,
     GetLocal,
@@ -74,6 +75,11 @@ impl Vm {
         loop {
             let instruction = unsafe { mem::transmute::<u8, OpCode>(read_byte!()) };
             match instruction {
+                OpCode::Constant => {
+                    let const_idx = usize::from(read_byte!());
+                    let value = frame!().closure.function.borrow().constants[const_idx].clone();
+                    self.push(value);
+                }
                 OpCode::Equal => {
                     let b = self.pop();
                     let a = self.pop();
@@ -85,7 +91,10 @@ impl Vm {
                     let local = self.stack[frame!().slots_start + usize::from(slot)].clone();
                     self.push(local);
                 }
-                OpCode::Neg => return Err(Error::Runtime(format!("Operand must be a number."))), //TODO handle numbers
+                OpCode::Neg => {
+                    let n = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operand must be a number.")))?;
+                    self.push(Value::new(-n));
+                }
                 OpCode::Nil => self.push(Value::nil()),
                 OpCode::Not => {
                     let operand = self.pop();
