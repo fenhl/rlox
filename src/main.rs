@@ -33,7 +33,7 @@ fn parse(mut source: impl Read) -> Result<Vec<ast::Stmt>> {
 }
 
 fn compile(source: impl Read) -> Result<FunctionInner> {
-    Ok(compiler::compile(parse(source)?))
+    compiler::compile(parse(source)?)
 }
 
 #[derive(StructOpt)]

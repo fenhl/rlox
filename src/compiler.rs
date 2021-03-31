@@ -38,8 +38,8 @@ impl Compiler {
     fn compile_expr(&mut self, expr: Expr) -> Result {
         match expr {
             Expr::Binary(lhs, op, rhs) => {
-                self.compile_expr(*lhs);
-                self.compile_expr(*rhs);
+                self.compile_expr(*lhs)?;
+                self.compile_expr(*rhs)?;
                 match op {
                     BinaryOp::NotEqual => {
                         self.emit(OpCode::Equal);
@@ -49,7 +49,7 @@ impl Compiler {
                 }
             }
             Expr::Unary(op, inner) => {
-                self.compile_expr(*inner);
+                self.compile_expr(*inner)?;
                 self.emit(match op {
                     UnaryOp::Not => OpCode::Not,
                     UnaryOp::Neg => OpCode::Neg,
@@ -59,21 +59,47 @@ impl Compiler {
             Expr::False => self.emit(OpCode::False),
             Expr::Nil => self.emit(OpCode::Nil),
             Expr::Number(n) => self.emit_constant(Value::new(n))?,
+            Expr::Variable(name) => {
+                //TODO locals and upvalues
+                let arg = self.make_constant(Value::new(name))?;
+                self.emit_with_arg(OpCode::GetGlobal, arg);
+            }
         }
         Ok(())
     }
 
-    fn compile_stmt(&mut self, stmt: Stmt) {
+    fn compile_stmt(&mut self, stmt: Stmt) -> Result {
         match stmt {
+            Stmt::Var(name, init) => {
+                let global = self.declare_variable(name)?;
+                if let Some(init) = init {
+                    self.compile_expr(init)?;
+                } else {
+                    self.emit(OpCode::Nil);
+                }
+                self.define_variable(global);
+            }
             Stmt::Expr(expr) => {
-                self.compile_expr(expr);
+                self.compile_expr(expr)?;
                 self.emit(OpCode::Pop);
             }
             Stmt::Print(expr) => {
-                self.compile_expr(expr);
+                self.compile_expr(expr)?;
                 self.emit(OpCode::Print);
             }
         }
+        Ok(())
+    }
+
+    fn declare_variable(&mut self, name: String) -> Result<u8> {
+        //TODO handle declarations inside scopes
+        //TODO intern variable name?
+        self.make_constant(Value::new(name))
+    }
+
+    fn define_variable(&mut self, global: u8) {
+        //TODO handle definitions inside scopes
+        self.emit_with_arg(OpCode::DefineGlobal, global);
     }
 
     fn emit(&mut self, opcode: OpCode) {
@@ -110,11 +136,11 @@ impl Compiler {
     }
 }
 
-pub(crate) fn compile(body: Vec<Stmt>) -> FunctionInner {
+pub(crate) fn compile(body: Vec<Stmt>) -> Result<FunctionInner> {
     let mut compiler = Compiler::new();
     for stmt in body {
-        compiler.compile_stmt(stmt);
+        compiler.compile_stmt(stmt)?;
     }
     compiler.emit_return();
-    compiler.finalize()
+    Ok(compiler.finalize())
 }

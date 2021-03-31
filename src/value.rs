@@ -15,6 +15,7 @@ pub(crate) enum Value {
     Bool(bool),
     Number(f64),
     Closure(Gc<Closure>),
+    String(Gc<String>),
 }
 
 impl Value {
@@ -29,8 +30,13 @@ impl Value {
         }
     }
 
-    pub(crate) fn as_number(&self) -> Option<f64> {
-        if let Value::Number(n) = *self { Some(n) } else { None }
+    pub(crate) fn as_number(&self) -> Option<f64> { if let Value::Number(n) = *self { Some(n) } else { None } }
+    pub(crate) fn as_string(&self) -> Option<Gc<String>> { if let Value::String(s) = self { Some(s.clone()) } else { None } }
+}
+
+impl From<String> for Value {
+    fn from(s: String) -> Value {
+        Value::String(Gc::new(s))
     }
 }
 
@@ -42,6 +48,7 @@ impl fmt::Display for Value {
             Value::Bool(false) => write!(f, "false"),
             Value::Number(n) => n.fmt(f),
             Value::Closure(closure) => closure.fmt(f),
+            Value::String(s) => s.fmt(f),
         }
     }
 }
@@ -53,7 +60,8 @@ impl PartialEq for Value {
             (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
             (Value::Number(lhs), Value::Number(rhs)) => lhs == rhs,
             (Value::Closure(lhs), Value::Closure(rhs)) => Gc::ptr_eq(lhs, rhs),
-            //TODO other cases (strings depending on interning, other kinds of objects)
+            (Value::String(lhs), Value::String(rhs)) => lhs == rhs, //TODO adjust for interning
+            //TODO other kinds of objects
             (_, _) => false, // values of different types are never equal
         }
     }

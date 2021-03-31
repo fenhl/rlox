@@ -56,6 +56,7 @@ extern {
 pub(crate) Program = Declaration*;
 
 Declaration = {
+    VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> SEMICOLON => Stmt::Var(name.to_owned(), init),
     Statement,
     //TODO others
 };
@@ -82,6 +83,7 @@ Unary = {
     FALSE => Expr::False,
     NIL => Expr::Nil,
     NUMBER =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
+    IDENTIFIER => Expr::Variable(<>.to_owned()),
     LEFT_PAREN <Expression> RIGHT_PAREN,
     //TODO others
 };

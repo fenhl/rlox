@@ -1,5 +1,8 @@
 use {
-    std::mem,
+    std::{
+        collections::HashMap,
+        mem,
+    },
     gc::Gc,
     crate::{
         error::{
@@ -17,8 +20,10 @@ use {
 #[repr(u8)]
 pub(crate) enum OpCode {
     Constant,
+    DefineGlobal,
     Equal,
     False,
+    GetGlobal,
     GetLocal,
     Neg,
     Nil,
@@ -38,6 +43,7 @@ struct CallFrame {
 pub(crate) struct Vm {
     frames: Vec<CallFrame>,
     stack: Vec<Gc<Value>>,
+    globals: HashMap<Gc<String>, Gc<Value>>,
 }
 
 impl Vm {
@@ -45,6 +51,7 @@ impl Vm {
         Vm {
             frames: Vec::default(),
             stack: Vec::default(),
+            globals: HashMap::default(), //TODO define `clock` native
         }
     }
 
@@ -72,13 +79,24 @@ impl Vm {
             }};
         }
 
+        macro_rules! read_constant {
+            () => {{
+                let const_idx = usize::from(read_byte!());
+                &frame!().closure.function.borrow().constants[const_idx]
+            }};
+        }
+
         loop {
             let instruction = unsafe { mem::transmute::<u8, OpCode>(read_byte!()) };
             match instruction {
                 OpCode::Constant => {
-                    let const_idx = usize::from(read_byte!());
-                    let value = frame!().closure.function.borrow().constants[const_idx].clone();
+                    let value = read_constant!().clone();
                     self.push(value);
+                }
+                OpCode::DefineGlobal => {
+                    let name = read_constant!().as_string().expect("global name was not a string");
+                    let value = self.pop();
+                    self.globals.insert(name, value);
                 }
                 OpCode::Equal => {
                     let b = self.pop();
@@ -86,6 +104,11 @@ impl Vm {
                     self.push(Value::new(a == b));
                 }
                 OpCode::False => self.push(Value::new(false)),
+                OpCode::GetGlobal => {
+                    let name = read_constant!().as_string().expect("global name was not a string");
+                    let value = self.globals.get(&name).ok_or_else(|| Error::Runtime(format!("Undefined variable '{}'.", name)))?.clone();
+                    self.push(value);
+                }
                 OpCode::GetLocal => {
                     let slot = read_byte!();
                     let local = self.stack[frame!().slots_start + usize::from(slot)].clone();

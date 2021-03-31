@@ -1,4 +1,5 @@
 pub(crate) enum Stmt {
+    Var(String, Option<Expr>),
     Expr(Expr),
     Print(Expr),
     //TODO others
@@ -11,6 +12,7 @@ pub(crate) enum Expr {
     False,
     Nil,
     Number(f64),
+    Variable(String),
     //TODO others
 }
 
