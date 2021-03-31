@@ -1,6 +1,7 @@
 pub(crate) enum Stmt {
     Var(String, Option<Expr>),
     Expr(Expr),
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     Block(Vec<Stmt>),
     //TODO others
@@ -20,6 +21,8 @@ pub(crate) enum Expr {
 }
 
 pub(crate) enum BinaryOp {
+    Or,
+    And,
     NotEqual,
     Equal,
     Greater,

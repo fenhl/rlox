@@ -59,22 +59,49 @@ Declaration = {
     //TODO classDecl
     //TODO funDecl
     VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> SEMICOLON => Stmt::Var(name.to_owned(), init),
-    Statement,
+    OpenStatement,
+    ClosedStatement,
 };
 
-Statement: Stmt = {
+Statement = { // to avoid the dangling else problem
+    OpenStatement,
+    ClosedStatement,
+};
+
+OpenStatement: Stmt = {
+    //TODO open for
+    IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:Statement> => Stmt::If(cond, Box::new(then), None),
+    IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:ClosedStatement> ELSE <else_:OpenStatement> => Stmt::If(cond, Box::new(then), Some(Box::new(else_))),
+    //TODO open while
+};
+
+ClosedStatement = {
+    //TODO closed for
+    IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:ClosedStatement> ELSE <else_:ClosedStatement> => Stmt::If(cond, Box::new(then), Some(Box::new(else_))),
+    //TODO closed while
+    SimpleStatement,
+};
+
+SimpleStatement: Stmt = {
     <Expression> SEMICOLON => Stmt::Expr(<>),
-    //TODO forStmt
-    //TODO ifStmt
     PRINT <Expression> SEMICOLON => Stmt::Print(<>),
     //TODO returnStmt
-    //TODO whileStmt
     LEFT_BRACE <Declaration*> RIGHT_BRACE => Stmt::Block(<>),
 };
 
-Expression: Expr = {
+Expression = {
     <name:IDENTIFIER> EQUAL <value:Expression> => Expr::Assign(None, name.to_owned(), Box::new(value)), //TODO field assignment
-    Equality, //TODO logic_or, logic_and
+    LogicOr,
+};
+
+LogicOr = { // simple optimization: make `or` right-associative so `true or x or y` only has to jump once
+    <lhs:LogicAnd> OR <rhs:LogicOr> => Expr::Binary(Box::new(lhs), BinaryOp::Or, Box::new(rhs)),
+    LogicAnd,
+};
+
+LogicAnd = { // simple optimization: make `and` right-associative so `false and x and y` only has to jump once
+    <lhs:Equality> AND <rhs:LogicAnd> => Expr::Binary(Box::new(lhs), BinaryOp::And, Box::new(rhs)),
+    Equality,
 };
 
 Equality = {
@@ -119,7 +146,7 @@ FactorOp: BinaryOp = {
     STAR => BinaryOp::Mul,
 };
 
-Unary = {
+Unary: Expr = {
     <op:UnaryOp> <expr:Unary> => Expr::Unary(op, Box::new(expr)),
     //TODO call
     TRUE => Expr::True,

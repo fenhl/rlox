@@ -1,5 +1,8 @@
 use {
-    std::convert::TryInto as _,
+    std::convert::{
+        TryFrom as _,
+        TryInto as _,
+    },
     gc::Gc,
     crate::{
         ast::*,
@@ -28,6 +31,9 @@ struct Local {
     is_captured: bool,
 }
 
+#[must_use]
+struct Jump(usize);
+
 struct Compiler {
     function: FunctionInner,
     fn_type: FunctionType,
@@ -49,6 +55,51 @@ impl Compiler {
         }
     }
 
+    fn compile_stmt(&mut self, stmt: Stmt) -> Result {
+        match stmt {
+            Stmt::Var(name, init) => {
+                let global = self.declare_variable(name)?;
+                if let Some(init) = init {
+                    self.compile_expr(init)?;
+                } else {
+                    self.emit(OpCode::Nil);
+                }
+                self.define_variable(global);
+            }
+            Stmt::Expr(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(OpCode::Pop);
+            }
+            Stmt::If(cond, then, Some(else_)) => {
+                self.compile_expr(cond)?;
+                let then_jump = self.emit_jump(OpCode::JumpIfFalsePop);
+                self.compile_stmt(*then)?;
+                let else_jump = self.emit_jump(OpCode::Jump);
+                self.patch_jump(then_jump)?;
+                self.compile_stmt(*else_)?;
+                self.patch_jump(else_jump)?;
+            }
+            Stmt::If(cond, then, None) => {
+                self.compile_expr(cond)?;
+                let then_jump = self.emit_jump(OpCode::JumpIfFalsePop);
+                self.compile_stmt(*then)?;
+                self.patch_jump(then_jump)?;
+            }
+            Stmt::Print(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(OpCode::Print);
+            }
+            Stmt::Block(stmts) => {
+                self.begin_scope();
+                for stmt in stmts {
+                    self.compile_stmt(stmt)?;
+                }
+                self.end_scope();
+            }
+        }
+        Ok(())
+    }
+
     fn compile_expr(&mut self, expr: Expr) -> Result {
         match expr {
             Expr::Assign(Some(_), _, _) => unimplemented!(), //TODO
@@ -61,10 +112,26 @@ impl Compiler {
                 self.compile_expr(*value)?;
                 self.emit_with_arg(op, arg);
             }
+            Expr::Binary(lhs, BinaryOp::Or, rhs) => {
+                self.compile_expr(*lhs)?;
+                let jump = self.emit_jump(OpCode::JumpIfTruePeek);
+                self.emit(OpCode::Pop);
+                self.compile_expr(*rhs)?;
+                self.patch_jump(jump)?;
+            }
+            Expr::Binary(lhs, BinaryOp::And, rhs) => {
+                self.compile_expr(*lhs)?;
+                let jump = self.emit_jump(OpCode::JumpIfFalsePeek);
+                self.emit(OpCode::Pop);
+                self.compile_expr(*rhs)?;
+                self.patch_jump(jump)?;
+            }
             Expr::Binary(lhs, op, rhs) => {
                 self.compile_expr(*lhs)?;
                 self.compile_expr(*rhs)?;
                 match op {
+                    BinaryOp::Or => unreachable!(), // handled above
+                    BinaryOp::And => unreachable!(), // handled above
                     BinaryOp::NotEqual => {
                         self.emit(OpCode::Equal);
                         self.emit(OpCode::Not);
@@ -99,36 +166,6 @@ impl Compiler {
                     (self.make_constant(Value::new(name))?, OpCode::GetGlobal)
                 };
                 self.emit_with_arg(op, arg);
-            }
-        }
-        Ok(())
-    }
-
-    fn compile_stmt(&mut self, stmt: Stmt) -> Result {
-        match stmt {
-            Stmt::Var(name, init) => {
-                let global = self.declare_variable(name)?;
-                if let Some(init) = init {
-                    self.compile_expr(init)?;
-                } else {
-                    self.emit(OpCode::Nil);
-                }
-                self.define_variable(global);
-            }
-            Stmt::Expr(expr) => {
-                self.compile_expr(expr)?;
-                self.emit(OpCode::Pop);
-            }
-            Stmt::Print(expr) => {
-                self.compile_expr(expr)?;
-                self.emit(OpCode::Print);
-            }
-            Stmt::Block(stmts) => {
-                self.begin_scope();
-                for stmt in stmts {
-                    self.compile_stmt(stmt)?;
-                }
-                self.end_scope();
             }
         }
         Ok(())
@@ -205,6 +242,19 @@ impl Compiler {
 
     fn make_constant(&mut self, value: Gc<Value>) -> Result<u8> {
         self.function.add_constant(value).try_into().map_err(|_| Error::Compile(format!("Too many constants in one chunk.")))
+    }
+
+    fn emit_jump(&mut self, opcode: OpCode) -> Jump {
+        self.emit(opcode);
+        self.function.chunk.push(0);
+        self.function.chunk.push(0);
+        Jump(self.function.chunk.len() - 2)
+    }
+
+    fn patch_jump(&mut self, Jump(from_idx): Jump) -> Result {
+        let offset = u16::try_from(self.function.chunk.len() - from_idx - 2).map_err(|_| Error::Compile(format!("Too much code to jump over.")))?;
+        self.function.chunk.splice(from_idx..from_idx + 2, std::array::IntoIter::new(offset.to_le_bytes()));
+        Ok(())
     }
 
     fn emit_return(&mut self) {

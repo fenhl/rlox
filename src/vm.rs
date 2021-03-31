@@ -29,6 +29,10 @@ pub(crate) enum OpCode {
     GetLocal,
     Greater,
     GreaterEqual,
+    Jump,
+    JumpIfFalsePeek,
+    JumpIfFalsePop,
+    JumpIfTruePeek,
     Less,
     LessEqual,
     Mul,
@@ -80,7 +84,7 @@ impl Vm {
             };
         }
 
-        macro_rules! read_byte {
+        macro_rules! read_u8 {
             () => {{
                 let frame = frame!();
                 let byte = frame.closure.function.borrow().chunk[frame.ip];
@@ -89,15 +93,21 @@ impl Vm {
             }};
         }
 
+        macro_rules! read_u16 {
+            () => {
+                u16::from_le_bytes([read_u8!(), read_u8!()])
+            };
+        }
+
         macro_rules! read_constant {
             () => {{
-                let const_idx = usize::from(read_byte!());
+                let const_idx = usize::from(read_u8!());
                 &frame!().closure.function.borrow().constants[const_idx]
             }};
         }
 
         loop {
-            let instruction = unsafe { mem::transmute::<u8, OpCode>(read_byte!()) };
+            let instruction = unsafe { mem::transmute::<u8, OpCode>(read_u8!()) };
             match instruction {
                 OpCode::Add => {
                     let rhs = self.pop();
@@ -134,7 +144,7 @@ impl Vm {
                     self.push(value);
                 }
                 OpCode::GetLocal => {
-                    let slot = read_byte!();
+                    let slot = read_u8!();
                     let local = self.stack[frame!().slots_start + usize::from(slot)].clone();
                     self.push(local);
                 }
@@ -147,6 +157,22 @@ impl Vm {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
                     let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
                     self.push(Value::new(lhs >= rhs));
+                }
+                OpCode::Jump => {
+                    let offset = read_u16!();
+                    frame!().ip += usize::from(offset);
+                }
+                OpCode::JumpIfFalsePeek => {
+                    let offset = read_u16!();
+                    if !self.peek(0).as_bool() { frame!().ip += usize::from(offset) }
+                }
+                OpCode::JumpIfFalsePop => {
+                    let offset = read_u16!();
+                    if !self.pop().as_bool() { frame!().ip += usize::from(offset) }
+                }
+                OpCode::JumpIfTruePeek => {
+                    let offset = read_u16!();
+                    if self.peek(0).as_bool() { frame!().ip += usize::from(offset) }
                 }
                 OpCode::Less => {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
@@ -194,7 +220,7 @@ impl Vm {
                     }
                 }
                 OpCode::SetLocal => {
-                    let slot = read_byte!();
+                    let slot = read_u8!();
                     self.stack[frame!().slots_start + usize::from(slot)] = self.peek(0).clone();
                 }
                 OpCode::Sub => {
