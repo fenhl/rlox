@@ -40,6 +40,18 @@ impl fmt::Display for Value {
     }
 }
 
+impl PartialEq for Value {
+    fn eq(&self, rhs: &Value) -> bool {
+        match (self, rhs) {
+            (Value::Nil, Value::Nil) => true,
+            (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
+            (Value::Closure(lhs), Value::Closure(rhs)) => Gc::ptr_eq(lhs, rhs),
+            //TODO other cases (numbers, strings depending on interning, other kinds of objects)
+            (_, _) => false, // values of different types are never equal
+        }
+    }
+}
+
 #[derive(Trace, Finalize)]
 pub(crate) struct Closure {
     pub(crate) function: Function,

@@ -16,10 +16,21 @@ Statement: Stmt = {
 };
 
 Expression: Expr = {
-    <op:UnaryOp> <expr:Expression> => Expr::Unary(op, Box::new(expr)),
+    <lhs:Expression> <op:EqOp> <rhs:Unary> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    Unary,
+};
+
+EqOp: BinaryOp = {
+    "!=" => BinaryOp::NotEqual,
+    "==" => BinaryOp::Equal,
+};
+
+Unary = {
+    <op:UnaryOp> <expr:Unary> => Expr::Unary(op, Box::new(expr)),
     "true" => Expr::True,
     "false" => Expr::False,
     "nil" => Expr::Nil,
+    "(" <Expression> ")",
     //TODO others
 };
 

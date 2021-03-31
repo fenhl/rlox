@@ -16,6 +16,7 @@ use {
 
 #[repr(u8)]
 pub(crate) enum OpCode {
+    Equal,
     False,
     GetLocal,
     Neg,
@@ -73,6 +74,11 @@ impl Vm {
         loop {
             let instruction = unsafe { mem::transmute::<u8, OpCode>(read_byte!()) };
             match instruction {
+                OpCode::Equal => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push(Value::new(a == b));
+                }
                 OpCode::False => self.push(Value::new(false)),
                 OpCode::GetLocal => {
                     let slot = read_byte!();

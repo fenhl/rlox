@@ -28,6 +28,17 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: Expr) {
         match expr {
+            Expr::Binary(lhs, op, rhs) => {
+                self.compile_expr(*lhs);
+                self.compile_expr(*rhs);
+                match op {
+                    BinaryOp::NotEqual => {
+                        self.emit(OpCode::Equal);
+                        self.emit(OpCode::Not);
+                    }
+                    BinaryOp::Equal => self.emit(OpCode::Equal),
+                }
+            }
             Expr::Unary(op, inner) => {
                 self.compile_expr(*inner);
                 self.emit(match op {
