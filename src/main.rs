@@ -65,7 +65,7 @@ struct Args {
     script: Option<PathBuf>,
 }
 
-#[wheel::main]
+#[wheel::main(custom_exit)]
 fn main(args: Args) -> Result {
     let mut vm = Vm::new();
     if let Some(script) = args.script {

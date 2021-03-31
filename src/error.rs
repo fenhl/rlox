@@ -58,4 +58,15 @@ impl fmt::Display for Error {
     }
 }
 
+impl wheel::CustomExit for Error {
+    fn exit_code(&self) -> Option<i32> {
+        match self {
+            Error::Compile(_) | Error::Parse(_) => Some(65),
+            Error::Runtime(_) => Some(70),
+            Error::Io(_) => Some(74),
+            _ => None,
+        }
+    }
+}
+
 pub(crate) type Result<T = (), E = Error> = std::result::Result<T, E>;

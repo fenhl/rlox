@@ -632,8 +632,8 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wheel"
-version = "0.2.1"
-source = "git+https://github.com/fenhl/wheel?branch=main#100bbed10f6db4ccb2cac81f390040ed054b15d0"
+version = "0.3.0"
+source = "git+https://github.com/fenhl/wheel?branch=main#3f87a0c1fe1680ed4372ef405599386da79ea072"
 dependencies = [
  "paw",
  "wheel-derive",
@@ -641,8 +641,8 @@ dependencies = [
 
 [[package]]
 name = "wheel-derive"
-version = "0.2.1"
-source = "git+https://github.com/fenhl/wheel?branch=main#100bbed10f6db4ccb2cac81f390040ed054b15d0"
+version = "0.3.0"
+source = "git+https://github.com/fenhl/wheel?branch=main#3f87a0c1fe1680ed4372ef405599386da79ea072"
 dependencies = [
  "itertools",
  "proc-macro2",
