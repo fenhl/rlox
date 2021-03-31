@@ -22,9 +22,17 @@ enum FunctionType {
     Script,
 }
 
+struct Local {
+    name: String,
+    depth: Option<usize>,
+    is_captured: bool,
+}
+
 struct Compiler {
     function: FunctionInner,
     fn_type: FunctionType,
+    locals: Vec<Local>,
+    scope_depth: usize,
 }
 
 impl Compiler {
@@ -32,6 +40,12 @@ impl Compiler {
         Compiler {
             function: FunctionInner::default(),
             fn_type: FunctionType::Script,
+            locals: vec![Local {
+                name: String::default(), //TODO use this for methods and initializers
+                depth: Some(0),
+                is_captured: false,
+            }],
+            scope_depth: 0,
         }
     }
 
@@ -39,10 +53,13 @@ impl Compiler {
         match expr {
             Expr::Assign(Some(_), _, _) => unimplemented!(), //TODO
             Expr::Assign(None, name, value) => {
-                //TODO locals and upvalues
-                let arg = self.make_constant(Value::new(name))?;
+                let (arg, op) = if let Some(offset) = self.resolve_local(&name)? {
+                    (offset, OpCode::SetLocal)
+                } else { //TODO upvalues
+                    (self.make_constant(Value::new(name))?, OpCode::SetGlobal)
+                };
                 self.compile_expr(*value)?;
-                self.emit_with_arg(OpCode::SetGlobal, arg);
+                self.emit_with_arg(op, arg);
             }
             Expr::Binary(lhs, op, rhs) => {
                 self.compile_expr(*lhs)?;
@@ -76,9 +93,12 @@ impl Compiler {
             Expr::Number(n) => self.emit_constant(Value::new(n))?,
             Expr::String(s) => self.emit_constant(Value::new(s))?,
             Expr::Variable(name) => {
-                //TODO locals and upvalues
-                let arg = self.make_constant(Value::new(name))?;
-                self.emit_with_arg(OpCode::GetGlobal, arg);
+                let (arg, op) = if let Some(offset) = self.resolve_local(&name)? {
+                    (offset, OpCode::GetLocal)
+                } else { //TODO upvalues
+                    (self.make_constant(Value::new(name))?, OpCode::GetGlobal)
+                };
+                self.emit_with_arg(op, arg);
             }
         }
         Ok(())
@@ -103,19 +123,69 @@ impl Compiler {
                 self.compile_expr(expr)?;
                 self.emit(OpCode::Print);
             }
+            Stmt::Block(stmts) => {
+                self.begin_scope();
+                for stmt in stmts {
+                    self.compile_stmt(stmt)?;
+                }
+                self.end_scope();
+            }
         }
         Ok(())
     }
 
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
+        while self.locals.last().map_or(false, |local| local.depth.expect("undefined local at end of scope") > self.scope_depth) {
+            self.emit(OpCode::Pop);
+            self.locals.pop();
+        }
+        //TODO close captured upvalues instead
+    }
+
     fn declare_variable(&mut self, name: String) -> Result<u8> {
-        //TODO handle declarations inside scopes
+        if self.scope_depth > 0 {
+            for local in self.locals.iter().rev() {
+                if local.depth.map_or(false, |depth| depth < self.scope_depth) { break }
+                if local.name == name { return Err(Error::Compile(format!("Already variable with this name in this scope."))) }
+            }
+            if self.locals.len() > u8::MAX.into() { return Err(Error::Compile(format!("Too many local variables in function."))) }
+            self.locals.push(Local {
+                name,
+                depth: None,
+                is_captured: false,
+            });
+            return Ok(0)
+        }
         //TODO intern variable name?
         self.make_constant(Value::new(name))
     }
 
     fn define_variable(&mut self, global: u8) {
-        //TODO handle definitions inside scopes
-        self.emit_with_arg(OpCode::DefineGlobal, global);
+        if self.scope_depth > 0 {
+            self.mark_initialized();
+        } else {
+            self.emit_with_arg(OpCode::DefineGlobal, global);
+        }
+    }
+
+    fn mark_initialized(&mut self) {
+        if self.scope_depth > 0 {
+            self.locals.last_mut().expect("no local to mark as initialized").depth = Some(self.scope_depth);
+        }
+    }
+
+    fn resolve_local(&self, name: &str) -> Result<Option<u8>> {
+        Ok(if let Some((idx, local)) = self.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
+            if local.depth.is_none() { return Err(Error::Compile(format!("Can't read local variable in its own initializer."))) }
+            Some(idx as u8)
+        } else {
+            None
+        })
     }
 
     fn emit(&mut self, opcode: OpCode) {

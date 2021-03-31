@@ -39,6 +39,7 @@ pub(crate) enum OpCode {
     Print,
     Return,
     SetGlobal,
+    SetLocal,
     Sub,
     True,
 }
@@ -191,6 +192,10 @@ impl Vm {
                         self.globals.remove(&name);
                         return Err(Error::Runtime(format!("Undefined variable '{}'.", name)))
                     }
+                }
+                OpCode::SetLocal => {
+                    let slot = read_byte!();
+                    self.stack[frame!().slots_start + usize::from(slot)] = self.peek(0).clone();
                 }
                 OpCode::Sub => {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;

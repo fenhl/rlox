@@ -69,7 +69,7 @@ Statement: Stmt = {
     PRINT <Expression> SEMICOLON => Stmt::Print(<>),
     //TODO returnStmt
     //TODO whileStmt
-    //TODO block
+    LEFT_BRACE <Declaration*> RIGHT_BRACE => Stmt::Block(<>),
 };
 
 Expression: Expr = {

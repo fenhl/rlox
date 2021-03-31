@@ -2,6 +2,7 @@ pub(crate) enum Stmt {
     Var(String, Option<Expr>),
     Expr(Expr),
     Print(Expr),
+    Block(Vec<Stmt>),
     //TODO others
 }
 
