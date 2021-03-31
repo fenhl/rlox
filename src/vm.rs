@@ -19,18 +19,22 @@ use {
 
 #[repr(u8)]
 pub(crate) enum OpCode {
+    Add,
     Constant,
     DefineGlobal,
+    Div,
     Equal,
     False,
     GetGlobal,
     GetLocal,
+    Mul,
     Neg,
     Nil,
     Not,
     Pop,
     Print,
     Return,
+    Sub,
     True,
 }
 
@@ -89,6 +93,15 @@ impl Vm {
         loop {
             let instruction = unsafe { mem::transmute::<u8, OpCode>(read_byte!()) };
             match instruction {
+                OpCode::Add => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    self.push(match (&*lhs, &*rhs) {
+                        (Value::String(_), Value::String(_)) => unimplemented!(), //TODO string concatenation
+                        (Value::Number(lhs), Value::Number(rhs)) => Value::new(lhs + rhs),
+                        (_, _) => return Err(Error::Runtime(format!("Operands must be two numbers or two strings."))),
+                    });
+                }
                 OpCode::Constant => {
                     let value = read_constant!().clone();
                     self.push(value);
@@ -98,10 +111,15 @@ impl Vm {
                     let value = self.pop();
                     self.globals.insert(name, value);
                 }
+                OpCode::Div => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs / rhs));
+                }
                 OpCode::Equal => {
-                    let b = self.pop();
-                    let a = self.pop();
-                    self.push(Value::new(a == b));
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    self.push(Value::new(lhs == rhs));
                 }
                 OpCode::False => self.push(Value::new(false)),
                 OpCode::GetGlobal => {
@@ -113,6 +131,11 @@ impl Vm {
                     let slot = read_byte!();
                     let local = self.stack[frame!().slots_start + usize::from(slot)].clone();
                     self.push(local);
+                }
+                OpCode::Mul => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs * rhs));
                 }
                 OpCode::Neg => {
                     let n = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operand must be a number.")))?;
@@ -135,6 +158,11 @@ impl Vm {
                     }
                     self.stack.truncate(frame!().slots_start);
                     self.push(result);
+                }
+                OpCode::Sub => {
+                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    self.push(Value::new(lhs - rhs));
                 }
                 OpCode::True => self.push(Value::new(true)),
             }

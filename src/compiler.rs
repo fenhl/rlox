@@ -46,6 +46,10 @@ impl Compiler {
                         self.emit(OpCode::Not);
                     }
                     BinaryOp::Equal => self.emit(OpCode::Equal),
+                    BinaryOp::Sub => self.emit(OpCode::Sub),
+                    BinaryOp::Add => self.emit(OpCode::Add),
+                    BinaryOp::Div => self.emit(OpCode::Div),
+                    BinaryOp::Mul => self.emit(OpCode::Mul),
                 }
             }
             Expr::Unary(op, inner) => {

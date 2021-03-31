@@ -183,6 +183,7 @@ impl FunctionInner {
                 let len = stream.read_u64::<LittleEndian>()?.try_into().map_err(|_| Error::Decode("Chunk"))?;
                 let mut chunk = vec![0; len];
                 stream.read_exact(&mut chunk)?;
+                //TODO validate chunk for safety (and maybe offer an unsafe more where none of the other parts of a .rlox file are validated either)
                 chunk
             },
         })

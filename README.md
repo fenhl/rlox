@@ -2,7 +2,7 @@ This is `rlox`, a [Rust](https://rust-lang.org/) implementation of [the Lox prog
 
 # Implementation
 
-This implementation is still a work in progress (it currently passes 7 out of 246 tests), but implementation details include:
+This implementation is still a work in progress (it currently passes 10 out of 246 tests), but implementation details include:
 
 * Overall structure similar to clox, with a bytecode VM.
 * Uses existing code from Rust's ecosystem rather than reimplementing things like [hashtables](https://doc.rust-lang.org/std/collections/struct.HashMap.html) or [garbage collection](https://docs.rs/gc).

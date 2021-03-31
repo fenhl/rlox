@@ -68,13 +68,33 @@ Statement: Stmt = {
 };
 
 Expression: Expr = {
-    <lhs:Expression> <op:EqOp> <rhs:Unary> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
-    Unary,
+    <lhs:Expression> <op:EqOp> <rhs:Term> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    Term,
 };
 
 EqOp: BinaryOp = {
     BANG_EQUAL => BinaryOp::NotEqual,
     EQUAL_EQUAL => BinaryOp::Equal,
+};
+
+Term = {
+    <lhs:Term> <op:TermOp> <rhs:Factor> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    Factor,
+};
+
+TermOp: BinaryOp = {
+    MINUS => BinaryOp::Sub,
+    PLUS => BinaryOp::Add,
+};
+
+Factor = {
+    <lhs:Factor> <op:FactorOp> <rhs:Unary> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    Unary,
+};
+
+FactorOp: BinaryOp = {
+    SLASH => BinaryOp::Div,
+    STAR => BinaryOp::Mul,
 };
 
 Unary = {
