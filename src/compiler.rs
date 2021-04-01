@@ -292,6 +292,5 @@ pub(crate) fn compile(body: Vec<Stmt>) -> Result<FunctionInner> {
     for stmt in body {
         compiler.compile_stmt(stmt)?;
     }
-    compiler.emit_return();
     Ok(compiler.finalize())
 }
