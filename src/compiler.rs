@@ -89,6 +89,14 @@ impl Compiler {
                 self.compile_expr(expr)?;
                 self.emit(OpCode::Print);
             }
+            Stmt::While(cond, body) => {
+                let loop_start = self.function.chunk.len();
+                self.compile_expr(cond)?;
+                let exit_jump = self.emit_jump(OpCode::JumpIfFalsePop);
+                self.compile_stmt(*body)?;
+                self.emit_loop(loop_start)?;
+                self.patch_jump(exit_jump)?;
+            }
             Stmt::Block(stmts) => {
                 self.begin_scope();
                 for stmt in stmts {
@@ -254,6 +262,13 @@ impl Compiler {
     fn patch_jump(&mut self, Jump(from_idx): Jump) -> Result {
         let offset = u16::try_from(self.function.chunk.len() - from_idx - 2).map_err(|_| Error::Compile(format!("Too much code to jump over.")))?;
         self.function.chunk.splice(from_idx..from_idx + 2, std::array::IntoIter::new(offset.to_le_bytes()));
+        Ok(())
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) -> Result {
+        self.emit(OpCode::Loop);
+        let offset = u16::try_from(self.function.chunk.len() - loop_start + 2).map_err(|_| Error::Compile(format!("Loop body too large.")))?;
+        self.function.chunk.extend(std::array::IntoIter::new(offset.to_le_bytes()));
         Ok(())
     }
 

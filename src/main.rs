@@ -60,6 +60,9 @@ struct Args {
     /// When used with `--compile`, dump the bytecode to the given path instead of stdout.
     #[structopt(short, long, parse(from_os_str))]
     output: Option<PathBuf>,
+    /// Print a disassembly of the bytecode before running/dumping it.
+    #[structopt(long)]
+    disassemble: bool,
     /// The path to a Lox script or bytecode dump that will be run. If omitted, a repl is started.
     #[structopt(parse(from_os_str))]
     script: Option<PathBuf>,
@@ -70,6 +73,7 @@ fn main(args: Args) -> Result {
     let mut vm = Vm::new();
     if let Some(script) = args.script {
         let bytecode = compile(File::open(script)?)?;
+        if args.disassemble { bytecode.disassemble(); }
         if args.compile {
             let mut output = if let Some(out_path) = args.output {
                 Box::new(File::create(out_path)?) as Box<dyn Write>
@@ -91,7 +95,9 @@ fn main(args: Args) -> Result {
             let mut line = String::default();
             stdin.read_line(&mut line)?;
             if line.trim().is_empty() { break }
-            vm.interpret(compile(Cursor::new(line.as_bytes()))?)?;
+            let bytecode = compile(Cursor::new(line.as_bytes()))?;
+            if args.disassemble { bytecode.disassemble(); }
+            vm.interpret(bytecode)?;
         }
     }
     Ok(())

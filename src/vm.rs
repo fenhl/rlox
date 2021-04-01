@@ -18,6 +18,7 @@ use {
 };
 
 #[repr(u8)]
+#[derive(Debug)]
 pub(crate) enum OpCode {
     Add,
     Constant,
@@ -35,6 +36,7 @@ pub(crate) enum OpCode {
     JumpIfTruePeek,
     Less,
     LessEqual,
+    Loop,
     Mul,
     Neg,
     Nil,
@@ -46,6 +48,34 @@ pub(crate) enum OpCode {
     SetLocal,
     Sub,
     True,
+}
+
+impl OpCode {
+    pub(crate) fn disassemble(chunk: &mut &[u8], constants: &[Gc<Value>]) {
+        use OpCode::*;
+
+        let instruction = unsafe { mem::transmute::<u8, OpCode>(chunk[0]) };
+        *chunk = &chunk[1..];
+        match instruction {
+            Add | Div | Equal | False | Greater | GreaterEqual | Less | LessEqual | Mul | Neg | Nil | Not | Pop | Print | Return | Sub | True => println!("{:?}", instruction),
+            GetLocal | SetLocal => {
+                let arg = chunk[0];
+                *chunk = &chunk[1..];
+                println!("{:?} 0x{:02x}", instruction, arg);
+            }
+            Constant | DefineGlobal | GetGlobal | SetGlobal => {
+                let arg = chunk[0];
+                *chunk = &chunk[1..];
+                let constant = &constants[usize::from(arg)];
+                println!("{:?} 0x{:02x} ({})", instruction, arg, constant);
+            }
+            Jump | JumpIfFalsePeek | JumpIfFalsePop | JumpIfTruePeek | Loop => {
+                let offset = u16::from_le_bytes([chunk[0], chunk[1]]);
+                *chunk = &chunk[2..];
+                println!("{:?} 0x{:04x}", instruction, offset);
+            }
+        }
+    }
 }
 
 struct CallFrame {
@@ -183,6 +213,10 @@ impl Vm {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
                     let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
                     self.push(Value::new(lhs <= rhs));
+                }
+                OpCode::Loop => {
+                    let offset = read_u16!();
+                    frame!().ip -= usize::from(offset);
                 }
                 OpCode::Mul => {
                     let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;

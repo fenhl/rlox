@@ -58,10 +58,12 @@ pub(crate) Program = Declaration*;
 Declaration = {
     //TODO classDecl
     //TODO funDecl
-    VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> SEMICOLON => Stmt::Var(name.to_owned(), init),
+    VarDecl,
     OpenStatement,
     ClosedStatement,
 };
+
+VarDecl: Stmt = VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> SEMICOLON => Stmt::Var(name.to_owned(), init);
 
 Statement = { // to avoid the dangling else problem
     OpenStatement,
@@ -69,16 +71,24 @@ Statement = { // to avoid the dangling else problem
 };
 
 OpenStatement: Stmt = {
-    //TODO open for
+    FOR LEFT_PAREN <init:ForInit> <cond:Expression?> SEMICOLON <incr:Expression?> RIGHT_PAREN <body:OpenStatement> => {
+        let body = if let Some(incr) = incr { Stmt::Block(vec![body, Stmt::Expr(incr)]) } else { body };
+        let while_loop = Stmt::While(cond.unwrap_or(Expr::True), Box::new(body));
+        if let Some(init) = init { Stmt::Block(vec![init, while_loop]) } else { while_loop }
+    },
     IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:Statement> => Stmt::If(cond, Box::new(then), None),
     IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:ClosedStatement> ELSE <else_:OpenStatement> => Stmt::If(cond, Box::new(then), Some(Box::new(else_))),
-    //TODO open while
+    WHILE LEFT_PAREN <cond:Expression> RIGHT_PAREN <body:OpenStatement> => Stmt::While(cond, Box::new(body)),
 };
 
 ClosedStatement = {
-    //TODO closed for
+    FOR LEFT_PAREN <init:ForInit> <cond:Expression?> SEMICOLON <incr:Expression?> RIGHT_PAREN <body:ClosedStatement> => {
+        let body = if let Some(incr) = incr { Stmt::Block(vec![body, Stmt::Expr(incr)]) } else { body };
+        let while_loop = Stmt::While(cond.unwrap_or(Expr::True), Box::new(body));
+        if let Some(init) = init { Stmt::Block(vec![init, while_loop]) } else { while_loop }
+    },
     IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:ClosedStatement> ELSE <else_:ClosedStatement> => Stmt::If(cond, Box::new(then), Some(Box::new(else_))),
-    //TODO closed while
+    WHILE LEFT_PAREN <cond:Expression> RIGHT_PAREN <body:ClosedStatement> => Stmt::While(cond, Box::new(body)),
     SimpleStatement,
 };
 
@@ -87,6 +97,12 @@ SimpleStatement: Stmt = {
     PRINT <Expression> SEMICOLON => Stmt::Print(<>),
     //TODO returnStmt
     LEFT_BRACE <Declaration*> RIGHT_BRACE => Stmt::Block(<>),
+};
+
+ForInit: Option<Stmt> = {
+    VarDecl => Some(<>),
+    <Expression> SEMICOLON => Some(Stmt::Expr(<>)),
+    SEMICOLON => None,
 };
 
 Expression = {

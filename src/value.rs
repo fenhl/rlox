@@ -19,9 +19,12 @@ use {
         GcCell,
         Trace,
     },
-    crate::error::{
-        Error,
-        Result,
+    crate::{
+        error::{
+            Error,
+            Result,
+        },
+        vm::OpCode,
     },
 };
 
@@ -200,6 +203,14 @@ impl FunctionInner {
         sink.write_u64::<LittleEndian>(chunk.len().try_into().expect("bytecode is longer than u64::MAX bytes"))?;
         sink.write_all(&chunk)?;
         Ok(())
+    }
+
+    pub(crate) fn disassemble(&self) {
+        println!("== {} ==", self);
+        let mut rest = &*self.chunk;
+        while !rest.is_empty() {
+            OpCode::disassemble(&mut rest, &self.constants);
+        }
     }
 }
 
