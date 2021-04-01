@@ -1,6 +1,6 @@
 pub(crate) enum Stmt {
     //TODO class
-    //TODO fun
+    Fun(String, Vec<String>, Vec<Stmt>),
     Var(String, Option<Expr>),
     Expr(Expr),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
@@ -14,7 +14,7 @@ pub(crate) enum Expr {
     Assign(Option<Box<Expr>>, String, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
-    //TODO call
+    Call(Box<Expr>, Vec<Expr>),
     //TODO property
     True,
     False,

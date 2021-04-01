@@ -34,6 +34,7 @@ pub(crate) enum Value {
     Bool(bool),
     Number(f64),
     Closure(Gc<Closure>),
+    Function(Function),
     String(Gc<String>),
 }
 
@@ -49,6 +50,7 @@ impl Value {
         }
     }
 
+    pub(crate) fn as_function(&self) -> Option<Function> { if let Value::Function(f) = self { Some(f.clone()) } else { None } }
     pub(crate) fn as_number(&self) -> Option<f64> { if let Value::Number(n) = *self { Some(n) } else { None } }
     pub(crate) fn as_string(&self) -> Option<Gc<String>> { if let Value::String(s) = self { Some(s.clone()) } else { None } }
 
@@ -59,7 +61,8 @@ impl Value {
             2 => Value::Bool(true),
             3 => Value::Number(stream.read_f64::<LittleEndian>()?),
             4 => Value::Closure(Gc::new(Closure::read(stream)?)),
-            5 => {
+            5 => Value::Function(FunctionInner::read(stream, false)?.wrap()),
+            6 => {
                 let len = stream.read_u64::<LittleEndian>()?.try_into().map_err(|_| Error::Decode("String"))?;
                 let mut buf = Vec::with_capacity(len);
                 stream.read_exact(&mut buf)?;
@@ -82,8 +85,12 @@ impl Value {
                 sink.write_u8(4)?;
                 closure.write(sink)?;
             }
-            Value::String(s) => {
+            Value::Function(function) => {
                 sink.write_u8(5)?;
+                function.borrow().write(sink)?;
+            }
+            Value::String(s) => {
+                sink.write_u8(6)?;
                 sink.write_u64::<LittleEndian>(s.len().try_into().expect("string is longer than u64::MAX bytes"))?;
                 sink.write_all(s.as_bytes())?;
             }
@@ -106,6 +113,7 @@ impl fmt::Display for Value {
             Value::Bool(false) => write!(f, "false"),
             Value::Number(n) => n.fmt(f),
             Value::Closure(closure) => closure.fmt(f),
+            Value::Function(function) => function.borrow().fmt(f),
             Value::String(s) => s.fmt(f),
         }
     }
@@ -159,6 +167,7 @@ pub(crate) struct FunctionInner {
     pub(crate) arity: u8,
     pub(crate) chunk: Vec<u8>,
     pub(crate) constants: Vec<Gc<Value>>,
+    pub(crate) name: Option<Gc<String>>,
 }
 
 impl FunctionInner {
@@ -173,7 +182,13 @@ impl FunctionInner {
 
     pub(crate) fn read(stream: &mut impl Read, is_script: bool) -> Result<FunctionInner> {
         Ok(FunctionInner {
-            arity: if is_script { 0 } else { unimplemented!(/*TODO*/) },
+            name: if is_script { None } else {
+                let len = stream.read_u64::<LittleEndian>()?.try_into().map_err(|_| Error::Decode("String"))?;
+                let mut buf = Vec::with_capacity(len);
+                stream.read_exact(&mut buf)?;
+                Some(Gc::new(String::from_utf8(buf).map_err(|_| Error::Decode("String"))?))
+            },
+            arity: if is_script { 0 } else { stream.read_u8()? },
             constants: {
                 let len = stream.read_u8()?.into();
                 let mut constants = Vec::with_capacity(len);
@@ -193,9 +208,15 @@ impl FunctionInner {
     }
 
     pub(crate) fn write(&self, sink: &mut impl Write) -> io::Result<()> {
-        let FunctionInner { arity, chunk, constants } = self;
-        sink.write_u8(0xc0)?; // magic byte to distinguish rlox bytecode from Lox source code
-        assert_eq!(*arity, 0); //TODO write arity if function name exists
+        let FunctionInner { name, arity, chunk, constants } = self;
+        if let Some(name) = name {
+            sink.write_u64::<LittleEndian>(name.len().try_into().expect("function name is longer than u64::MAX bytes"))?;
+            sink.write_all(name.as_bytes())?;
+            sink.write_u8(*arity)?;
+        } else {
+            sink.write_u8(0xc0)?; // magic byte to distinguish rlox bytecode from Lox source code
+            assert_eq!(*arity, 0);
+        }
         sink.write_u8(constants.len().try_into().expect("more than u8::MAX constants"))?;
         for constant in constants {
             constant.write(sink)?;
@@ -216,7 +237,11 @@ impl FunctionInner {
 
 impl fmt::Display for FunctionInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<script>") //TODO print function name if any
+        if let Some(ref name) = self.name {
+            name.fmt(f)
+        } else {
+            write!(f, "<script>")
+        }
     }
 }
 

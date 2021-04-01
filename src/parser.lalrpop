@@ -1,5 +1,8 @@
 use {
-    std::str::FromStr as _,
+    std::{
+        iter,
+        str::FromStr as _,
+    },
     lalrpop_util::ParseError,
     crate::ast::*,
 };
@@ -57,7 +60,10 @@ pub(crate) Program = Declaration*;
 
 Declaration = {
     //TODO classDecl
-    //TODO funDecl
+    FUN <name:IDENTIFIER> LEFT_PAREN <params:(<IDENTIFIER> <(COMMA <IDENTIFIER>)*>)?> RIGHT_PAREN LEFT_BRACE <body:Declaration*> RIGHT_BRACE => {
+        let params = params.map(|(first, rest)| iter::once(first).chain(rest).map(ToOwned::to_owned).collect()).unwrap_or_default();
+        Stmt::Fun(name.to_owned(), params, body)
+    },
     VarDecl,
     OpenStatement,
     ClosedStatement,
@@ -162,9 +168,26 @@ FactorOp: BinaryOp = {
     STAR => BinaryOp::Mul,
 };
 
-Unary: Expr = {
+Unary = {
     <op:UnaryOp> <expr:Unary> => Expr::Unary(op, Box::new(expr)),
-    //TODO call
+    Call,
+};
+
+UnaryOp: UnaryOp = {
+    BANG => UnaryOp::Not,
+    MINUS => UnaryOp::Neg,
+};
+
+Call = {
+    <rcpt:Call> LEFT_PAREN <args:(<Expression> <(COMMA <Expression>)*>)?> RIGHT_PAREN => {
+        let args = args.map(|(first, rest)| iter::once(first).chain(rest).collect()).unwrap_or_default();
+        Expr::Call(Box::new(rcpt), args)
+    },
+    //TODO property access
+    Primary,
+};
+
+Primary: Expr = {
     TRUE => Expr::True,
     FALSE => Expr::False,
     NIL => Expr::Nil,
@@ -177,9 +200,4 @@ Unary: Expr = {
     IDENTIFIER => Expr::Variable(<>.to_owned()),
     LEFT_PAREN <Expression> RIGHT_PAREN,
     //TODO super
-};
-
-UnaryOp: UnaryOp = {
-    BANG => UnaryOp::Not,
-    MINUS => UnaryOp::Neg,
 };
