@@ -1,75 +1,76 @@
 use {
-    std::{
-        iter,
-        str::FromStr as _,
+    std::iter,
+    crate::{
+        ast::*,
+        lexer::*,
     },
-    lalrpop_util::ParseError,
-    crate::ast::*,
 };
 
 grammar;
 
-match {
-    r"[\t\n\r ]*" => {},
-    r"//[^\n\r]*[\n\r]*" => {},
-    "and" => AND,
-    "class" => CLASS,
-    "else" => ELSE,
-    "false" => FALSE,
-    "for" => FOR,
-    "fun" => FUN,
-    "if" => IF,
-    "nil" => NIL,
-    "or" => OR,
-    "print" => PRINT,
-    "return" => RETURN,
-    "super" => SUPER,
-    "this" => THIS,
-    "true" => TRUE,
-    "var" => VAR,
-    "while" => WHILE,
-    r"[A-Z_a-z][0-9A-Z_a-z]*" => IDENTIFIER,
-    r"[0-9]+(?:.[0-9]+)?" => NUMBER,
-    "(" => LEFT_PAREN,
-    ")" => RIGHT_PAREN,
-    "{" => LEFT_BRACE,
-    "}" => RIGHT_BRACE,
-    ";" => SEMICOLON,
-    "," => COMMA,
-    "." => DOT,
-    "-" => MINUS,
-    "+" => PLUS,
-    "/" => SLASH,
-    "*" => STAR,
-    "!=" => BANG_EQUAL,
-    "!" => BANG,
-    "==" => EQUAL_EQUAL,
-    "=" => EQUAL,
-    "<=" => LESS_EQUAL,
-    "<" => LESS,
-    ">=" => GREATER_EQUAL,
-    ">" => GREATER,
-    r#""[^"]*""# => STRING,
-}
-
 extern {
+    type Location = u32;
     type Error = crate::error::Error;
+
+    enum Token {
+        AND => AND(<u32>),
+        CLASS => CLASS(<u32>),
+        ELSE => ELSE(<u32>),
+        FALSE => FALSE(<u32>),
+        FOR => FOR(<u32>),
+        FUN => FUN(<u32>),
+        IF => IF(<u32>),
+        NIL => NIL(<u32>),
+        OR => OR(<u32>),
+        PRINT => PRINT(<u32>),
+        RETURN => RETURN(<u32>),
+        SUPER => SUPER(<u32>),
+        THIS => THIS(<u32>),
+        TRUE => TRUE(<u32>),
+        VAR => VAR(<u32>),
+        WHILE => WHILE(<u32>),
+        IDENTIFIER => IDENTIFIER(<(u32, String)>),
+        NUMBER => NUMBER(<(u32, f64)>),
+        LEFT_PAREN => LEFT_PAREN(<u32>),
+        RIGHT_PAREN => RIGHT_PAREN(<u32>),
+        LEFT_BRACE => LEFT_BRACE(<u32>),
+        RIGHT_BRACE => RIGHT_BRACE(<u32>),
+        SEMICOLON => SEMICOLON(<u32>),
+        COMMA => COMMA(<u32>),
+        DOT => DOT(<u32>),
+        MINUS => MINUS(<u32>),
+        PLUS => PLUS(<u32>),
+        SLASH => SLASH(<u32>),
+        STAR => STAR(<u32>),
+        BANG_EQUAL => BANG_EQUAL(<u32>),
+        BANG => BANG(<u32>),
+        EQUAL_EQUAL => EQUAL_EQUAL(<u32>),
+        EQUAL => EQUAL(<u32>),
+        LESS_EQUAL => LESS_EQUAL(<u32>),
+        LESS => LESS(<u32>),
+        GREATER_EQUAL => GREATER_EQUAL(<u32>),
+        GREATER => GREATER(<u32>),
+        STRING => STRING(<(u32, u32, String)>),
+    }
 }
 
 pub(crate) Program = Declaration*;
 
 Declaration = {
     //TODO classDecl
-    FUN <name:IDENTIFIER> LEFT_PAREN <params:(<IDENTIFIER> <(COMMA <IDENTIFIER>)*>)?> RIGHT_PAREN LEFT_BRACE <body:Declaration*> RIGHT_BRACE => {
-        let params = params.map(|(first, rest)| iter::once(first).chain(rest).map(ToOwned::to_owned).collect()).unwrap_or_default();
-        Stmt::Fun(name.to_owned(), params, body)
+    FUN <name:IDENTIFIER> LEFT_PAREN <params:(<IDENTIFIER> <(COMMA <IDENTIFIER>)*>)?> RIGHT_PAREN LEFT_BRACE <body:Declaration*> <last_line:RIGHT_BRACE> => {
+        let params = params.map(|(first, rest)| iter::once(first).chain(rest).map(|(_, name)| name).collect()).unwrap_or_default();
+        Stmt::Fun { name: name.1.to_owned(), params, body, last_line }
     },
     VarDecl,
     OpenStatement,
     ClosedStatement,
 };
 
-VarDecl: Stmt = VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> SEMICOLON => Stmt::Var(name.to_owned(), init);
+VarDecl: Stmt = VAR <name:IDENTIFIER> <init:(EQUAL <Expression>)?> <last_line:SEMICOLON> => {
+    let (name_line, name) = name;
+    Stmt::Var { name, name_line, init, last_line }
+};
 
 Statement = { // to avoid the dangling else problem
     OpenStatement,
@@ -77,42 +78,42 @@ Statement = { // to avoid the dangling else problem
 };
 
 OpenStatement: Stmt = {
-    FOR LEFT_PAREN <init:ForInit> <cond:Expression?> SEMICOLON <incr:Expression?> RIGHT_PAREN <body:OpenStatement> => {
-        let body = if let Some(incr) = incr { Stmt::Block(vec![body, Stmt::Expr(incr)]) } else { body };
-        let while_loop = Stmt::While(cond.unwrap_or(Expr::True), Box::new(body));
-        if let Some(init) = init { Stmt::Block(vec![init, while_loop]) } else { while_loop }
+    FOR LEFT_PAREN <init:ForInit> <cond:Expression?> SEMICOLON <incr:Expression?> <right_paren_line:RIGHT_PAREN> <body:OpenStatement> => {
+        let body = if let Some(incr) = incr { Stmt::Block { last_line: body.last_line(), stmts: vec![body, Stmt::Expr { expr: incr, last_line: right_paren_line }] } } else { body };
+        let while_loop = Stmt::While { cond: cond.unwrap_or(Expr::True { line: 0 }), right_paren_line, body: Box::new(body) };
+        if let Some(init) = init { Stmt::Block { last_line: while_loop.last_line(), stmts: vec![init, while_loop] } } else { while_loop }
     },
-    IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:Statement> => Stmt::If(cond, Box::new(then), None),
-    IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:ClosedStatement> ELSE <else_:OpenStatement> => Stmt::If(cond, Box::new(then), Some(Box::new(else_))),
-    WHILE LEFT_PAREN <cond:Expression> RIGHT_PAREN <body:OpenStatement> => Stmt::While(cond, Box::new(body)),
+    IF LEFT_PAREN <cond:Expression> <right_paren_line:RIGHT_PAREN> <then:Statement> => Stmt::If { cond, right_paren_line, then: Box::new(then), else_: None },
+    IF LEFT_PAREN <cond:Expression> <right_paren_line:RIGHT_PAREN> <then:ClosedStatement> ELSE <else_:OpenStatement> => Stmt::If { cond, right_paren_line, then: Box::new(then), else_: Some(Box::new(else_)) },
+    WHILE LEFT_PAREN <cond:Expression> <right_paren_line:RIGHT_PAREN> <body:OpenStatement> => Stmt::While { cond, right_paren_line, body: Box::new(body) },
 };
 
 ClosedStatement = {
-    FOR LEFT_PAREN <init:ForInit> <cond:Expression?> SEMICOLON <incr:Expression?> RIGHT_PAREN <body:ClosedStatement> => {
-        let body = if let Some(incr) = incr { Stmt::Block(vec![body, Stmt::Expr(incr)]) } else { body };
-        let while_loop = Stmt::While(cond.unwrap_or(Expr::True), Box::new(body));
-        if let Some(init) = init { Stmt::Block(vec![init, while_loop]) } else { while_loop }
+    FOR LEFT_PAREN <init:ForInit> <cond:Expression?> SEMICOLON <incr:Expression?> <right_paren_line:RIGHT_PAREN> <body:ClosedStatement> => {
+        let body = if let Some(incr) = incr { Stmt::Block { last_line: body.last_line(), stmts: vec![body, Stmt::Expr { expr: incr, last_line: right_paren_line }] } } else { body };
+        let while_loop = Stmt::While { cond: cond.unwrap_or(Expr::True { line: 0 }), right_paren_line, body: Box::new(body) };
+        if let Some(init) = init { Stmt::Block { last_line: while_loop.last_line(), stmts: vec![init, while_loop] } } else { while_loop }
     },
-    IF LEFT_PAREN <cond:Expression> RIGHT_PAREN <then:ClosedStatement> ELSE <else_:ClosedStatement> => Stmt::If(cond, Box::new(then), Some(Box::new(else_))),
-    WHILE LEFT_PAREN <cond:Expression> RIGHT_PAREN <body:ClosedStatement> => Stmt::While(cond, Box::new(body)),
+    IF LEFT_PAREN <cond:Expression> <right_paren_line:RIGHT_PAREN> <then:ClosedStatement> ELSE <else_:ClosedStatement> => Stmt::If { cond, right_paren_line, then: Box::new(then), else_: Some(Box::new(else_)) },
+    WHILE LEFT_PAREN <cond:Expression> <right_paren_line:RIGHT_PAREN> <body:ClosedStatement> => Stmt::While { cond, right_paren_line, body: Box::new(body) },
     SimpleStatement,
 };
 
 SimpleStatement: Stmt = {
-    <Expression> SEMICOLON => Stmt::Expr(<>),
-    PRINT <Expression> SEMICOLON => Stmt::Print(<>),
+    <expr:Expression> <last_line:SEMICOLON> => Stmt::Expr { <> },
+    PRINT <expr:Expression> <last_line:SEMICOLON> => Stmt::Print { <> },
     //TODO returnStmt
-    LEFT_BRACE <Declaration*> RIGHT_BRACE => Stmt::Block(<>),
+    LEFT_BRACE <stmts:Declaration*> <last_line:RIGHT_BRACE> => Stmt::Block { <> },
 };
 
 ForInit: Option<Stmt> = {
     VarDecl => Some(<>),
-    <Expression> SEMICOLON => Some(Stmt::Expr(<>)),
+    <expr:Expression> <last_line:SEMICOLON> => Some(Stmt::Expr { <> }),
     SEMICOLON => None,
 };
 
 Expression = {
-    <name:IDENTIFIER> EQUAL <value:Expression> => Expr::Assign(None, name.to_owned(), Box::new(value)), //TODO field assignment
+    <name:IDENTIFIER> EQUAL <value:Expression> => Expr::Assign(None, name.1, Box::new(value)), //TODO field assignment
     LogicOr,
 };
 
@@ -179,25 +180,31 @@ UnaryOp: UnaryOp = {
 };
 
 Call = {
-    <rcpt:Call> LEFT_PAREN <args:(<Expression> <(COMMA <Expression>)*>)?> RIGHT_PAREN => {
+    <rcpt:Call> LEFT_PAREN <args:(<Expression> <(COMMA <Expression>)*>)?> <last_line:RIGHT_PAREN> => {
         let args = args.map(|(first, rest)| iter::once(first).chain(rest).collect()).unwrap_or_default();
-        Expr::Call(Box::new(rcpt), args)
+        Expr::Call { rcpt: Box::new(rcpt), args, last_line }
     },
     //TODO property access
     Primary,
 };
 
 Primary: Expr = {
-    TRUE => Expr::True,
-    FALSE => Expr::False,
-    NIL => Expr::Nil,
+    TRUE => Expr::True { line: <> },
+    FALSE => Expr::False { line: <> },
+    NIL => Expr::Nil { line: <> },
     //TODO this
-    NUMBER =>? f64::from_str(<>).map(Expr::Number).map_err(|e| ParseError::User { error: e.into() }),
-    STRING => {
-        let quoted = <>;
-        Expr::String(quoted[1..quoted.len() - 1].to_owned())
+    NUMBER => {
+        let (line, value) = <>;
+        Expr::Number { value, line }
     },
-    IDENTIFIER => Expr::Variable(<>.to_owned()),
+    STRING => {
+        let (_, last_line, value) = <>;
+        Expr::String { value, last_line }
+    },
+    IDENTIFIER => {
+        let (line, name) = <>;
+        Expr::Variable { name: name.to_owned(), line }
+    },
     LEFT_PAREN <Expression> RIGHT_PAREN,
     //TODO super
 };

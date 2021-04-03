@@ -3,27 +3,15 @@ use {
         fmt,
         io,
         num::ParseFloatError,
+        string::FromUtf8Error,
     },
     derive_more::From,
-    lalrpop_util::{
-        ParseError,
+    lalrpop_util::ParseError,
+    crate::{
         lexer::Token,
+        vm::CallFrame,
     },
 };
-
-pub struct OwnedToken(usize, String);
-
-impl fmt::Display for OwnedToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.1.fmt(f)
-    }
-}
-
-impl<'input> From<Token<'input>> for OwnedToken {
-    fn from(Token(location, lexeme): Token<'_>) -> OwnedToken {
-        OwnedToken(location, lexeme.to_owned())
-    }
-}
 
 #[derive(From)]
 pub enum Error {
@@ -32,15 +20,20 @@ pub enum Error {
     Decode(&'static str),
     #[from]
     Io(io::Error),
-    Parse(ParseError<usize, OwnedToken, Box<Error>>),
+    Parse(ParseError<u32, Token, Box<Error>>),
     #[from]
     ParseFloat(ParseFloatError),
-    Runtime(String),
+    Runtime {
+        msg: String,
+        call_stack: Vec<CallFrame>,
+    },
+    #[from]
+    Utf8(FromUtf8Error),
 }
 
-impl<'input> From<ParseError<usize, Token<'input>, Error>> for Error {
-    fn from(e: ParseError<usize, Token<'input>, Error>) -> Error {
-        Error::Parse(e.map_token(OwnedToken::from).map_error(Box::new))
+impl From<ParseError<u32, Token, Error>> for Error {
+    fn from(e: ParseError<u32, Token, Error>) -> Error {
+        Error::Parse(e.map_error(Box::new))
     }
 }
 
@@ -53,19 +46,32 @@ impl fmt::Display for Error {
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Parse(e) => write!(f, "parse error: {}", e),
             Error::ParseFloat(e) => e.fmt(f),
-            Error::Runtime(msg) => write!(f, "runtime error: {}", msg),
+            Error::Runtime { msg, call_stack } => {
+                writeln!(f, "{}", msg)?;
+                for frame in call_stack.into_iter().rev() {
+                    write!(f, "[line {}] in ", frame.closure.function.borrow().lines[frame.ip - 1])?;
+                    if let Some(ref name) = frame.closure.function.borrow().name {
+                        writeln!(f, "{}()", name)?;
+                    } else {
+                        writeln!(f, "script")?;
+                    }
+                }
+                Ok(())
+            }
+            Error::Utf8(e) => write!(f, "error reading string: {}", e),
         }
     }
 }
 
 impl wheel::CustomExit for Error {
-    fn exit_code(&self) -> Option<i32> {
-        match self {
-            Error::Compile(_) | Error::Parse(_) => Some(65),
-            Error::Runtime(_) => Some(70),
-            Error::Io(_) => Some(74),
-            _ => None,
-        }
+    fn exit(self, _: &'static str) -> ! {
+        eprintln!("{}", self);
+        std::process::exit(match self {
+            Error::Compile(_) | Error::Parse(_) => 65,
+            Error::Runtime { .. } => 70,
+            Error::Io(_) => 74,
+            _ => 1,
+        })
     }
 }
 

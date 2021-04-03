@@ -19,6 +19,7 @@ use {
             Error,
             Result,
         },
+        lexer::Lexer,
         value::FunctionInner,
         vm::Vm,
     },
@@ -27,17 +28,13 @@ use {
 mod ast;
 mod compiler;
 mod error;
+mod lexer;
 lalrpop_mod!(parser);
 mod value;
 mod vm;
 
-fn parse(mut source: impl Read) -> Result<Vec<ast::Stmt>> {
-    let buf = {
-        let mut buf = String::default();
-        source.read_to_string(&mut buf)?; //TODO use a lexer that works with Read
-        buf
-    };
-    Ok(parser::ProgramParser::new().parse(&buf)?)
+fn parse(source: impl Read) -> Result<Vec<ast::Stmt>> {
+    Ok(parser::ProgramParser::new().parse(Lexer::new(Box::new(source)))?)
 }
 
 fn compile(mut source: impl Read + Seek) -> Result<FunctionInner> {

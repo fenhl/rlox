@@ -17,6 +17,25 @@ use {
     },
 };
 
+macro_rules! error {
+    ($vm:expr, $($arg:tt)*) => {{
+        let vm = $vm;
+        return Err(Error::Runtime {
+            msg: format!($($arg)*),
+            call_stack: vm.frames.clone(),
+        })
+    }};
+}
+
+macro_rules! expect {
+    ($vm:expr, $option:expr, $($arg:tt)*) => {{
+        $option.ok_or_else(|| Error::Runtime {
+            msg: format!($($arg)*),
+            call_stack: $vm.frames.clone(),
+        })?
+    }};
+}
+
 const FRAMES_MAX: usize = 64;
 
 #[repr(u8)]
@@ -82,9 +101,10 @@ impl OpCode {
     }
 }
 
-struct CallFrame {
-    closure: Gc<Closure>,
-    ip: usize,
+#[derive(Clone)]
+pub struct CallFrame {
+    pub(crate) closure: Gc<Closure>,
+    pub(crate) ip: usize,
     slots_start: usize,
 }
 
@@ -148,7 +168,7 @@ impl Vm {
                     self.push(match (&*lhs, &*rhs) {
                         (Value::String(lhs), Value::String(rhs)) => Value::new(format!("{}{}", lhs, rhs)),
                         (Value::Number(lhs), Value::Number(rhs)) => Value::new(lhs + rhs),
-                        (_, _) => return Err(Error::Runtime(format!("Operands must be two numbers or two strings."))),
+                        (_, _) => error!(self, "Operands must be two numbers or two strings."),
                     });
                 }
                 OpCode::Call => {
@@ -171,8 +191,8 @@ impl Vm {
                     self.globals.insert(name, value);
                 }
                 OpCode::Div => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs / rhs));
                 }
                 OpCode::Equal => {
@@ -183,7 +203,7 @@ impl Vm {
                 OpCode::False => self.push(Value::new(false)),
                 OpCode::GetGlobal => {
                     let name = read_constant!().as_string().expect("global name was not a string");
-                    let value = self.globals.get(&name).ok_or_else(|| Error::Runtime(format!("Undefined variable '{}'.", name)))?.clone();
+                    let value = expect!(self, self.globals.get(&name), "Undefined variable '{}'.", name).clone();
                     self.push(value);
                 }
                 OpCode::GetLocal => {
@@ -192,13 +212,13 @@ impl Vm {
                     self.push(local);
                 }
                 OpCode::Greater => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs > rhs));
                 }
                 OpCode::GreaterEqual => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs >= rhs));
                 }
                 OpCode::Jump => {
@@ -218,13 +238,13 @@ impl Vm {
                     if self.peek(0).as_bool() { frame!().ip += usize::from(offset) }
                 }
                 OpCode::Less => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs < rhs));
                 }
                 OpCode::LessEqual => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs <= rhs));
                 }
                 OpCode::Loop => {
@@ -232,12 +252,12 @@ impl Vm {
                     frame!().ip -= usize::from(offset);
                 }
                 OpCode::Mul => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs * rhs));
                 }
                 OpCode::Neg => {
-                    let n = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operand must be a number.")))?;
+                    let n = expect!(self, self.pop().as_number(), "Operand must be a number.");
                     self.push(Value::new(-n));
                 }
                 OpCode::Nil => self.push(Value::nil()),
@@ -263,7 +283,7 @@ impl Vm {
                     let value = self.peek(0).clone();
                     if self.globals.insert(name.clone(), value).is_none() {
                         self.globals.remove(&name);
-                        return Err(Error::Runtime(format!("Undefined variable '{}'.", name)))
+                        error!(self, "Undefined variable '{}'.", name)
                     }
                 }
                 OpCode::SetLocal => {
@@ -271,8 +291,8 @@ impl Vm {
                     self.stack[frame!().slots_start + usize::from(slot)] = self.peek(0).clone();
                 }
                 OpCode::Sub => {
-                    let rhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
-                    let lhs = self.pop().as_number().ok_or_else(|| Error::Runtime(format!("Operands must be numbers.")))?;
+                    let rhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
+                    let lhs = expect!(self, self.pop().as_number(), "Operands must be numbers.");
                     self.push(Value::new(lhs - rhs));
                 }
                 OpCode::True => self.push(Value::new(true)),
@@ -284,14 +304,14 @@ impl Vm {
         match *value {
             Value::Closure(ref closure) => self.call(closure.clone(), arg_count),
             //TODO bound methods, classes, native functions
-            _ => Err(Error::Runtime(format!("Can only call functions and classes."))),
+            _ => error!(self, "Can only call functions and classes."),
         }
     }
 
     fn call(&mut self, closure: Gc<Closure>, arg_count: u8) -> Result {
         let arity = closure.function.borrow().arity;
-        if arg_count != arity { return Err(Error::Runtime(format!("Expected {} arguments but got {}.", arity, arg_count))) }
-        if self.frames.len() == FRAMES_MAX { return Err(Error::Runtime(format!("Stack overflow."))) }
+        if arg_count != arity { error!(self, "Expected {} arguments but got {}.", arity, arg_count) }
+        if self.frames.len() == FRAMES_MAX { error!(self, "Stack overflow.") }
         self.frames.push(CallFrame {
             closure,
             ip: 0,

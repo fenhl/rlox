@@ -1,29 +1,95 @@
 pub(crate) enum Stmt {
     //TODO class
-    Fun(String, Vec<String>, Vec<Stmt>),
-    Var(String, Option<Expr>),
-    Expr(Expr),
-    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
-    Print(Expr),
+    Fun {
+        name: String,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+        last_line: u32,
+    },
+    Var {
+        name: String,
+        name_line: u32,
+        init: Option<Expr>,
+        last_line: u32,
+    },
+    Expr {
+        expr: Expr,
+        last_line: u32,
+    },
+    If {
+        cond: Expr,
+        right_paren_line: u32,
+        then: Box<Stmt>,
+        else_: Option<Box<Stmt>>,
+    },
+    Print {
+        expr: Expr,
+        last_line: u32,
+    },
     //TODO return
-    While(Expr, Box<Stmt>),
-    Block(Vec<Stmt>),
+    While {
+        cond: Expr,
+        right_paren_line: u32,
+        body: Box<Stmt>,
+    },
+    Block {
+        stmts: Vec<Stmt>,
+        last_line: u32,
+    },
+}
+
+impl Stmt {
+    pub(crate) fn last_line(&self) -> u32 {
+        match self {
+            Stmt::Fun { last_line, .. } | Stmt::Var { last_line, .. } | Stmt::Expr { last_line, .. } | Stmt::Print { last_line, .. } | Stmt::Block { last_line, .. } => *last_line,
+            Stmt::If { then: inner, else_: None, .. } | Stmt::If { else_: Some(inner), .. } | Stmt::While { body: inner, .. } => inner.last_line(),
+        }
+    }
 }
 
 pub(crate) enum Expr {
     Assign(Option<Box<Expr>>, String, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
-    Call(Box<Expr>, Vec<Expr>),
+    Call {
+        rcpt: Box<Expr>,
+        args: Vec<Expr>,
+        last_line: u32,
+    },
     //TODO property
-    True,
-    False,
-    Nil,
+    True {
+        line: u32,
+    },
+    False {
+        line: u32,
+    },
+    Nil {
+        line: u32,
+    },
     //TODO this
-    Number(f64),
-    String(String),
-    Variable(String),
+    Number {
+        value: f64,
+        line: u32,
+    },
+    String {
+        value: String,
+        last_line: u32,
+    },
+    Variable {
+        name: String,
+        line: u32,
+    },
     //TODO super
+}
+
+impl Expr {
+    pub(crate) fn last_line(&self) -> u32 {
+        match self {
+            Expr::True { line } | Expr::False { line } | Expr::Nil { line } | Expr::Number { line, .. } | Expr::Variable { line, .. } => *line,
+            Expr::Call { last_line, .. } | Expr::String { last_line, .. } => *last_line,
+            Expr::Assign(_, _, inner) | Expr::Binary(_, _, inner) | Expr::Unary(_, inner) => inner.last_line(),
+        }
+    }
 }
 
 pub(crate) enum BinaryOp {

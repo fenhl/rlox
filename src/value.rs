@@ -166,6 +166,7 @@ impl fmt::Display for Closure {
 pub(crate) struct FunctionInner {
     pub(crate) arity: u8,
     pub(crate) chunk: Vec<u8>,
+    pub(crate) lines: Vec<u32>,
     pub(crate) constants: Vec<Gc<Value>>,
     pub(crate) name: Option<Gc<String>>,
 }
@@ -173,6 +174,11 @@ pub(crate) struct FunctionInner {
 impl FunctionInner {
     pub(crate) fn wrap(self) -> Function {
         Gc::new(GcCell::new(self))
+    }
+
+    pub(crate) fn add_code(&mut self, line: u32, code: u8) {
+        self.lines.push(line);
+        self.chunk.push(code);
     }
 
     pub(crate) fn add_constant(&mut self, value: Gc<Value>) -> usize {
@@ -204,11 +210,21 @@ impl FunctionInner {
                 //TODO validate chunk for safety (and maybe offer an unsafe more where none of the other parts of a .rlox file are validated either)
                 chunk
             },
+            lines: {
+                let mut lines = Vec::default();
+                loop {
+                    let run_len = stream.read_u8()?;
+                    if run_len == 0 { break }
+                    let line = stream.read_u32::<LittleEndian>()?;
+                    lines.resize(lines.len() + usize::from(run_len), line);
+                }
+                lines
+            },
         })
     }
 
     pub(crate) fn write(&self, sink: &mut impl Write) -> io::Result<()> {
-        let FunctionInner { name, arity, chunk, constants } = self;
+        let FunctionInner { name, arity, chunk, lines, constants } = self;
         if let Some(name) = name {
             sink.write_u64::<LittleEndian>(name.len().try_into().expect("function name is longer than u64::MAX bytes"))?;
             sink.write_all(name.as_bytes())?;
@@ -223,6 +239,17 @@ impl FunctionInner {
         }
         sink.write_u64::<LittleEndian>(chunk.len().try_into().expect("bytecode is longer than u64::MAX bytes"))?;
         sink.write_all(&chunk)?;
+        let mut lines = lines.iter().peekable();
+        while let Some(&line) = lines.next() {
+            let mut run_len = 1;
+            while run_len < u8::MAX && lines.peek().map_or(false, |&&next_line| next_line == line) {
+                run_len += 1;
+                let _ = lines.next();
+            }
+            sink.write_u8(run_len)?;
+            sink.write_u32::<LittleEndian>(line)?;
+        }
+        sink.write_u8(0)?; // end of lines
         Ok(())
     }
 
