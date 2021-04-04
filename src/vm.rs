@@ -270,12 +270,12 @@ impl Vm {
                 OpCode::Return => {
                     let result = self.pop();
                     //TODO close upvalues
-                    let _ = self.frames.pop();
+                    let popped_frame = self.frames.pop().expect("tried to return from empty call stack");
                     if self.frames.is_empty() {
                         let _ = self.pop();
                         return Ok(())
                     }
-                    self.stack.truncate(frame!().slots_start);
+                    self.stack.truncate(popped_frame.slots_start);
                     self.push(result);
                 }
                 OpCode::SetGlobal => {

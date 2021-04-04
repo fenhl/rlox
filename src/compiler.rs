@@ -71,14 +71,13 @@ impl Compiler {
                 self.emit(last_line, OpCode::Pop);
             }
             Stmt::Fun { name, name_line, params, body, last_line } => {
-                if params.len() > 255 {
-                    return Err(Error::Compile {
-                        msg: format!("Can't have more than 255 parameters."),
-                        line: params[255].0,
-                    })
-                }
+                let arity = params.len().try_into().map_err(|_| Error::Compile {
+                    msg: format!("Can't have more than 255 parameters."),
+                    line: params[255].0,
+                })?;
                 let global = self.declare_variable(name_line, name.clone(), true)?; //TODO wrap in Gc to avoid the clone?
                 let mut compiler = Compiler::new(FunctionType::Function);
+                compiler.function.arity = arity;
                 compiler.function.name = Some(Gc::new(name));
                 for (line, param) in params {
                     compiler.declare_variable(line, param, true)?;
