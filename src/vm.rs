@@ -119,7 +119,7 @@ impl Vm {
         Vm {
             frames: Vec::default(),
             stack: Vec::default(),
-            globals: HashMap::default(), //TODO define `clock` native
+            globals: crate::native::all(),
         }
     }
 
@@ -303,7 +303,13 @@ impl Vm {
     fn call_value(&mut self, value: Gc<Value>, arg_count: u8) -> Result {
         match *value {
             Value::Closure(ref closure) => self.call(closure.clone(), arg_count),
-            //TODO bound methods, classes, native functions
+            Value::NativeFn(crate::value::NativeFn { inner }) => {
+                let result = inner(&self.stack[self.stack.len() - usize::from(arg_count)..self.stack.len()]);
+                self.stack.truncate(self.stack.len() - usize::from(arg_count) - 1);
+                self.push(result);
+                Ok(())
+            }
+            //TODO bound methods, classes
             _ => error!(self, "Can only call functions and classes."),
         }
     }

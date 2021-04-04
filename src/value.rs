@@ -35,6 +35,7 @@ pub(crate) enum Value {
     Number(f64),
     Closure(Gc<Closure>),
     Function(Function),
+    NativeFn(NativeFn),
     String(Gc<String>),
 }
 
@@ -62,7 +63,8 @@ impl Value {
             3 => Value::Number(stream.read_f64::<LittleEndian>()?),
             4 => Value::Closure(Gc::new(Closure::read(stream)?)),
             5 => Value::Function(FunctionInner::read(stream, false)?.wrap()),
-            6 => {
+            6 => Value::NativeFn(NativeFn { inner: crate::native::deserialize(stream.read_u8()?).ok_or_else(|| Error::Decode("NativeFn"))? }),
+            7 => {
                 let len = stream.read_u64::<LittleEndian>()?.try_into().map_err(|_| Error::Decode("String"))?;
                 let mut buf = Vec::with_capacity(len);
                 stream.read_exact(&mut buf)?;
@@ -89,13 +91,23 @@ impl Value {
                 sink.write_u8(5)?;
                 function.borrow().write(sink)?;
             }
-            Value::String(s) => {
+            Value::NativeFn(NativeFn { inner }) => {
                 sink.write_u8(6)?;
+                sink.write_u8(crate::native::serialize(*inner))?;
+            }
+            Value::String(s) => {
+                sink.write_u8(7)?;
                 sink.write_u64::<LittleEndian>(s.len().try_into().expect("string is longer than u64::MAX bytes"))?;
                 sink.write_all(s.as_bytes())?;
             }
         }
         Ok(())
+    }
+}
+
+impl From<crate::native::NativeFn> for Value {
+    fn from(inner: crate::native::NativeFn) -> Value {
+        Value::NativeFn(NativeFn { inner })
     }
 }
 
@@ -114,6 +126,7 @@ impl fmt::Display for Value {
             Value::Number(n) => n.fmt(f),
             Value::Closure(closure) => closure.fmt(f),
             Value::Function(function) => function.borrow().fmt(f),
+            Value::NativeFn(_) => write!(f, "<native fn>"),
             Value::String(s) => s.fmt(f),
         }
     }
@@ -273,3 +286,9 @@ impl fmt::Display for FunctionInner {
 }
 
 pub(crate) type Function = Gc<GcCell<FunctionInner>>;
+
+#[derive(Trace, Finalize)]
+pub(crate) struct NativeFn {
+    #[unsafe_ignore_trace]
+    pub(crate) inner: crate::native::NativeFn,
+}

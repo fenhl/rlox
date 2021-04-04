@@ -29,6 +29,7 @@ mod ast;
 mod compiler;
 mod error;
 mod lexer;
+mod native;
 lalrpop_mod!(parser);
 mod value;
 mod vm;
