@@ -110,6 +110,26 @@ impl Compiler {
                 self.compile_expr(expr)?;
                 self.emit(last_line, OpCode::Print);
             }
+            Stmt::Return { keyword_line, expr, last_line } => {
+                if let FunctionType::Script = self.fn_type {
+                    return Err(Error::Compile {
+                        msg: format!("Can't return from top-level code."),
+                        line: keyword_line,
+                    })
+                }
+                if let Some(expr) = expr {
+                    if let FunctionType::Initializer = self.fn_type {
+                        return Err(Error::Compile {
+                            msg: format!("Can't return a vale from an initializer."),
+                            line: keyword_line,
+                        })
+                    }
+                    self.compile_expr(expr)?;
+                    self.emit(last_line, OpCode::Return);
+                } else {
+                    self.emit_return(last_line);
+                }
+            }
             Stmt::While { cond, right_paren_line, body, .. } => {
                 let loop_start = self.function.chunk.len();
                 self.compile_expr(cond)?;

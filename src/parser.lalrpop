@@ -103,7 +103,7 @@ ClosedStatement = {
 SimpleStatement: Stmt = {
     <expr:Expression> <last_line:SEMICOLON> => Stmt::Expr { <> },
     PRINT <expr:Expression> <last_line:SEMICOLON> => Stmt::Print { <> },
-    //TODO returnStmt
+    <keyword_line:RETURN> <expr:Expression?> <last_line:SEMICOLON> => Stmt::Return { <> },
     LEFT_BRACE <stmts:Declaration*> <last_line:RIGHT_BRACE> => Stmt::Block { <> },
 };
 

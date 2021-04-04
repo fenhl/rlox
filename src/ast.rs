@@ -27,7 +27,11 @@ pub(crate) enum Stmt {
         expr: Expr,
         last_line: u32,
     },
-    //TODO return
+    Return {
+        keyword_line: u32,
+        expr: Option<Expr>,
+        last_line: u32,
+    },
     While {
         cond: Expr,
         right_paren_line: u32,
@@ -42,7 +46,7 @@ pub(crate) enum Stmt {
 impl Stmt {
     pub(crate) fn last_line(&self) -> u32 {
         match self {
-            Stmt::Fun { last_line, .. } | Stmt::Var { last_line, .. } | Stmt::Expr { last_line, .. } | Stmt::Print { last_line, .. } | Stmt::Block { last_line, .. } => *last_line,
+            Stmt::Fun { last_line, .. } | Stmt::Var { last_line, .. } | Stmt::Expr { last_line, .. } | Stmt::Print { last_line, .. } | Stmt::Return { last_line, .. } | Stmt::Block { last_line, .. } => *last_line,
             Stmt::If { then: inner, else_: None, .. } | Stmt::If { else_: Some(inner), .. } | Stmt::While { body: inner, .. } => inner.last_line(),
         }
     }
