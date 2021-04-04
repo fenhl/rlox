@@ -59,8 +59,9 @@ pub(crate) Program = Declaration*;
 Declaration = {
     //TODO classDecl
     FUN <name:IDENTIFIER> LEFT_PAREN <params:(<IDENTIFIER> <(COMMA <IDENTIFIER>)*>)?> RIGHT_PAREN LEFT_BRACE <body:Declaration*> <last_line:RIGHT_BRACE> => {
-        let params = params.map(|(first, rest)| iter::once(first).chain(rest).map(|(_, name)| name).collect()).unwrap_or_default();
-        Stmt::Fun { name: name.1.to_owned(), params, body, last_line }
+        let (name_line, name) = name;
+        let params = params.map(|(first, rest)| iter::once(first).chain(rest).collect()).unwrap_or_default();
+        Stmt::Fun { name, name_line, params, body, last_line }
     },
     VarDecl,
     OpenStatement,
@@ -113,22 +114,25 @@ ForInit: Option<Stmt> = {
 };
 
 Expression = {
-    <name:IDENTIFIER> EQUAL <value:Expression> => Expr::Assign(None, name.1, Box::new(value)), //TODO field assignment
+    <name:IDENTIFIER> EQUAL <value:Expression> => { //TODO field assignment
+        let (name_line, name) = name;
+        Expr::Assign { rcpt: None, name, name_line, value: Box::new(value) }
+    },
     LogicOr,
 };
 
 LogicOr = { // simple optimization: make `or` right-associative so `true or x or y` only has to jump once
-    <lhs:LogicAnd> OR <rhs:LogicOr> => Expr::Binary(Box::new(lhs), BinaryOp::Or, Box::new(rhs)),
+    <lhs:LogicAnd> OR <rhs:LogicOr> => Expr::Binary { lhs: Box::new(lhs), op: BinaryOp::Or, rhs: Box::new(rhs) },
     LogicAnd,
 };
 
 LogicAnd = { // simple optimization: make `and` right-associative so `false and x and y` only has to jump once
-    <lhs:Equality> AND <rhs:LogicAnd> => Expr::Binary(Box::new(lhs), BinaryOp::And, Box::new(rhs)),
+    <lhs:Equality> AND <rhs:LogicAnd> => Expr::Binary { lhs: Box::new(lhs), op: BinaryOp::And, rhs: Box::new(rhs) },
     Equality,
 };
 
 Equality = {
-    <lhs:Equality> <op:EqualityOp> <rhs:Comparison> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    <lhs:Equality> <op:EqualityOp> <rhs:Comparison> => Expr::Binary { lhs: Box::new(lhs), op, rhs: Box::new(rhs) },
     Comparison,
 };
 
@@ -138,7 +142,7 @@ EqualityOp: BinaryOp = {
 };
 
 Comparison = {
-    <lhs:Comparison> <op:ComparisonOp> <rhs:Term> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    <lhs:Comparison> <op:ComparisonOp> <rhs:Term> => Expr::Binary { lhs: Box::new(lhs), op, rhs: Box::new(rhs) },
     Term,
 };
 
@@ -150,7 +154,7 @@ ComparisonOp: BinaryOp = {
 };
 
 Term = {
-    <lhs:Term> <op:TermOp> <rhs:Factor> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    <lhs:Term> <op:TermOp> <rhs:Factor> => Expr::Binary { lhs: Box::new(lhs), op, rhs: Box::new(rhs) },
     Factor,
 };
 
@@ -160,7 +164,7 @@ TermOp: BinaryOp = {
 };
 
 Factor = {
-    <lhs:Factor> <op:FactorOp> <rhs:Unary> => Expr::Binary(Box::new(lhs), op, Box::new(rhs)),
+    <lhs:Factor> <op:FactorOp> <rhs:Unary> => Expr::Binary { lhs: Box::new(lhs), op, rhs: Box::new(rhs) },
     Unary,
 };
 
@@ -170,7 +174,7 @@ FactorOp: BinaryOp = {
 };
 
 Unary = {
-    <op:UnaryOp> <expr:Unary> => Expr::Unary(op, Box::new(expr)),
+    <op:UnaryOp> <expr:Unary> => Expr::Unary { op, inner: Box::new(expr) },
     Call,
 };
 
@@ -203,7 +207,7 @@ Primary: Expr = {
     },
     IDENTIFIER => {
         let (line, name) = <>;
-        Expr::Variable { name: name.to_owned(), line }
+        Expr::Variable { name, line }
     },
     LEFT_PAREN <Expression> RIGHT_PAREN,
     //TODO super

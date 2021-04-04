@@ -200,7 +200,10 @@ impl<'a> Iterator for Lexer<'a> {
                         }
                         Ok(Some(b'"')) => break,
                         Ok(Some(byte)) => buf.push(byte),
-                        Ok(None) => return Some(Err(Error::Compile(format!("Unterminated string.")))),
+                        Ok(None) => return Some(Err(Error::Compile {
+                            msg: format!("Unterminated string."),
+                            line: self.line,
+                        })),
                         Err(e) => return Some(Err(e)),
                     }
                 }
@@ -209,7 +212,10 @@ impl<'a> Iterator for Lexer<'a> {
                     Err(e) => return Some(Err(e.into())),
                 }
             }
-            _ => return Some(Err(Error::Compile(format!("Unexpected character.")))),
+            _ => return Some(Err(Error::Compile {
+                msg: format!("Unexpected character."),
+                line: self.line,
+            })),
         };
         Some(Ok((starting_line, token, self.line)))
     }

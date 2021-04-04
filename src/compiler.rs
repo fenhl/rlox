@@ -58,7 +58,7 @@ impl Compiler {
     fn compile_stmt(&mut self, stmt: Stmt) -> Result {
         match stmt {
             Stmt::Var { name, name_line, init, last_line } => {
-                let global = self.declare_variable(name, false)?;
+                let global = self.declare_variable(name_line, name, false)?;
                 if let Some(init) = init {
                     self.compile_expr(init)?;
                 } else {
@@ -70,13 +70,18 @@ impl Compiler {
                 self.compile_expr(expr)?;
                 self.emit(last_line, OpCode::Pop);
             }
-            Stmt::Fun { name, params, body, last_line } => {
-                if params.len() > 255 { return Err(Error::Compile(format!("Can't have more than 255 parameters."))) }
-                let global = self.declare_variable(name.clone(), true)?; //TODO wrap in Gc to avoid the clone?
+            Stmt::Fun { name, name_line, params, body, last_line } => {
+                if params.len() > 255 {
+                    return Err(Error::Compile {
+                        msg: format!("Can't have more than 255 parameters."),
+                        line: params[255].0,
+                    })
+                }
+                let global = self.declare_variable(name_line, name.clone(), true)?; //TODO wrap in Gc to avoid the clone?
                 let mut compiler = Compiler::new(FunctionType::Function);
                 compiler.function.name = Some(Gc::new(name));
-                for param in params {
-                    compiler.declare_variable(param, true)?;
+                for (line, param) in params {
+                    compiler.declare_variable(line, param, true)?;
                 }
                 for stmt in body {
                     compiler.compile_stmt(stmt)?;
@@ -90,15 +95,17 @@ impl Compiler {
                 let then_last_line = then.last_line();
                 self.compile_stmt(*then)?;
                 let else_jump = self.emit_jump(then_last_line, OpCode::Jump);
-                self.patch_jump(then_jump)?;
+                self.patch_jump(then_last_line, then_jump)?;
+                let else_last_line = else_.last_line();
                 self.compile_stmt(*else_)?;
-                self.patch_jump(else_jump)?;
+                self.patch_jump(else_last_line, else_jump)?;
             }
             Stmt::If { cond, right_paren_line, then, else_: None, .. } => {
                 self.compile_expr(cond)?;
                 let then_jump = self.emit_jump(right_paren_line, OpCode::JumpIfFalsePop);
+                let then_last_line = then.last_line();
                 self.compile_stmt(*then)?;
-                self.patch_jump(then_jump)?;
+                self.patch_jump(then_last_line, then_jump)?;
             }
             Stmt::Print { expr, last_line } => {
                 self.compile_expr(expr)?;
@@ -111,7 +118,7 @@ impl Compiler {
                 let body_last_line = body.last_line();
                 self.compile_stmt(*body)?;
                 self.emit_loop(body_last_line, loop_start)?;
-                self.patch_jump(exit_jump)?;
+                self.patch_jump(body_last_line, exit_jump)?;
             }
             Stmt::Block { stmts, last_line } => {
                 self.begin_scope();
@@ -126,34 +133,36 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: Expr) -> Result {
         match expr {
-            Expr::Assign(Some(_), _, _) => unimplemented!(), //TODO
-            Expr::Assign(None, name, value) => {
-                let (arg, op) = if let Some(offset) = self.resolve_local(&name)? {
+            Expr::Assign { rcpt: Some(_), .. } => unimplemented!(), //TODO
+            Expr::Assign { rcpt: None, name, name_line, value } => {
+                let (arg, op) = if let Some(offset) = self.resolve_local(name_line, &name)? {
                     (offset, OpCode::SetLocal)
                 } else { //TODO upvalues
-                    (self.make_constant(Value::new(name))?, OpCode::SetGlobal)
+                    (self.make_constant(name_line, Value::new(name))?, OpCode::SetGlobal)
                 };
                 let value_last_line = value.last_line();
                 self.compile_expr(*value)?;
                 self.emit_with_arg(value_last_line, op, arg);
             }
-            Expr::Binary(lhs, BinaryOp::Or, rhs) => {
+            Expr::Binary { lhs, op: BinaryOp::Or, rhs } => {
                 let lhs_last_line = lhs.last_line();
                 self.compile_expr(*lhs)?;
                 let jump = self.emit_jump(lhs_last_line, OpCode::JumpIfTruePeek);
                 self.emit(lhs_last_line, OpCode::Pop);
+                let rhs_last_line = rhs.last_line();
                 self.compile_expr(*rhs)?;
-                self.patch_jump(jump)?;
+                self.patch_jump(rhs_last_line, jump)?;
             }
-            Expr::Binary(lhs, BinaryOp::And, rhs) => {
+            Expr::Binary { lhs, op: BinaryOp::And, rhs } => {
                 let lhs_last_line = lhs.last_line();
                 self.compile_expr(*lhs)?;
                 let jump = self.emit_jump(lhs_last_line, OpCode::JumpIfFalsePeek);
                 self.emit(lhs_last_line, OpCode::Pop);
+                let rhs_last_line = rhs.last_line();
                 self.compile_expr(*rhs)?;
-                self.patch_jump(jump)?;
+                self.patch_jump(rhs_last_line, jump)?;
             }
-            Expr::Binary(lhs, op, rhs) => {
+            Expr::Binary { lhs, op, rhs } => {
                 self.compile_expr(*lhs)?;
                 let rhs_last_line = rhs.last_line();
                 self.compile_expr(*rhs)?;
@@ -175,7 +184,7 @@ impl Compiler {
                     BinaryOp::Mul => self.emit(rhs_last_line, OpCode::Mul),
                 }
             }
-            Expr::Unary(op, inner) => {
+            Expr::Unary { op, inner } => {
                 let last_line = inner.last_line();
                 self.compile_expr(*inner)?;
                 self.emit(last_line, match op {
@@ -184,7 +193,10 @@ impl Compiler {
                 });
             }
             Expr::Call { rcpt, args, last_line } => {
-                let arg_count = args.len().try_into().map_err(|_| Error::Compile(format!("Can't have more than 255 arguments.")))?;
+                let arg_count = args.len().try_into().map_err(|_| Error::Compile {
+                    msg: format!("Can't have more than 255 arguments."),
+                    line: args[255].last_line(),
+                })?;
                 self.compile_expr(*rcpt)?;
                 for arg in args {
                     self.compile_expr(arg)?;
@@ -197,10 +209,10 @@ impl Compiler {
             Expr::Number { value, line } => self.emit_constant(line, OpCode::Constant, Value::new(value))?,
             Expr::String { value, last_line } => self.emit_constant(last_line, OpCode::Constant, Value::new(value))?,
             Expr::Variable { name, line } => {
-                let (arg, op) = if let Some(offset) = self.resolve_local(&name)? {
+                let (arg, op) = if let Some(offset) = self.resolve_local(line, &name)? {
                     (offset, OpCode::GetLocal)
                 } else { //TODO upvalues
-                    (self.make_constant(Value::new(name))?, OpCode::GetGlobal)
+                    (self.make_constant(line, Value::new(name))?, OpCode::GetGlobal)
                 };
                 self.emit_with_arg(line, op, arg);
             }
@@ -221,13 +233,23 @@ impl Compiler {
         //TODO close captured upvalues instead
     }
 
-    fn declare_variable(&mut self, name: String, initialized: bool) -> Result<u8> {
+    fn declare_variable(&mut self, name_line: u32, name: String, initialized: bool) -> Result<u8> {
         if self.scope_depth > 0 {
             for local in self.locals.iter().rev() {
                 if local.depth.map_or(false, |depth| depth < self.scope_depth) { break }
-                if local.name == name { return Err(Error::Compile(format!("Already variable with this name in this scope."))) }
+                if local.name == name {
+                    return Err(Error::Compile {
+                        msg: format!("Already variable with this name in this scope."),
+                        line: name_line,
+                    })
+                }
             }
-            if self.locals.len() > u8::MAX.into() { return Err(Error::Compile(format!("Too many local variables in function."))) }
+            if self.locals.len() > u8::MAX.into() {
+                return Err(Error::Compile {
+                    msg: format!("Too many local variables in function."),
+                    line: name_line,
+                })
+            }
             self.locals.push(Local {
                 name,
                 depth: initialized.then(|| self.scope_depth),
@@ -236,7 +258,7 @@ impl Compiler {
             return Ok(0)
         }
         //TODO intern variable name?
-        self.make_constant(Value::new(name))
+        self.make_constant(name_line, Value::new(name))
     }
 
     fn define_variable(&mut self, line: u32, global: u8) {
@@ -247,9 +269,14 @@ impl Compiler {
         }
     }
 
-    fn resolve_local(&self, name: &str) -> Result<Option<u8>> {
+    fn resolve_local(&self, line: u32, name: &str) -> Result<Option<u8>> {
         Ok(if let Some((idx, local)) = self.locals.iter().enumerate().rfind(|(_, local)| local.name == name) {
-            if local.depth.is_none() { return Err(Error::Compile(format!("Can't read local variable in its own initializer."))) }
+            if local.depth.is_none() {
+                return Err(Error::Compile {
+                    msg: format!("Can't read local variable in its own initializer."),
+                    line,
+                })
+            }
             Some(idx as u8)
         } else {
             None
@@ -266,13 +293,16 @@ impl Compiler {
     }
 
     fn emit_constant(&mut self, line: u32, opcode: OpCode, value: Gc<Value>) -> Result {
-        let const_idx = self.make_constant(value)?;
+        let const_idx = self.make_constant(line, value)?;
         self.emit_with_arg(line, opcode, const_idx);
         Ok(())
     }
 
-    fn make_constant(&mut self, value: Gc<Value>) -> Result<u8> {
-        self.function.add_constant(value).try_into().map_err(|_| Error::Compile(format!("Too many constants in one chunk.")))
+    fn make_constant(&mut self, line: u32, value: Gc<Value>) -> Result<u8> {
+        self.function.add_constant(value).try_into().map_err(|_| Error::Compile {
+            msg: format!("Too many constants in one chunk."),
+            line,
+        })
     }
 
     fn emit_jump(&mut self, line: u32, opcode: OpCode) -> Jump {
@@ -282,15 +312,21 @@ impl Compiler {
         Jump(self.function.chunk.len() - 2)
     }
 
-    fn patch_jump(&mut self, Jump(from_idx): Jump) -> Result {
-        let offset = u16::try_from(self.function.chunk.len() - from_idx - 2).map_err(|_| Error::Compile(format!("Too much code to jump over.")))?;
+    fn patch_jump(&mut self, line: u32, Jump(from_idx): Jump) -> Result {
+        let offset = u16::try_from(self.function.chunk.len() - from_idx - 2).map_err(|_| Error::Compile {
+            msg: format!("Too much code to jump over."),
+            line,
+        })?;
         self.function.chunk.splice(from_idx..from_idx + 2, std::array::IntoIter::new(offset.to_le_bytes()));
         Ok(())
     }
 
     fn emit_loop(&mut self, line: u32, loop_start: usize) -> Result {
         self.emit(line, OpCode::Loop);
-        let offset = u16::try_from(self.function.chunk.len() - loop_start + 2).map_err(|_| Error::Compile(format!("Loop body too large.")))?;
+        let offset = u16::try_from(self.function.chunk.len() - loop_start + 2).map_err(|_| Error::Compile {
+            msg: format!("Loop body too large."),
+            line,
+        })?;
         let [b1, b2] = offset.to_le_bytes();
         self.function.add_code(line, b1);
         self.function.add_code(line, b2);

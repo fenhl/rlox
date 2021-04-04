@@ -15,7 +15,10 @@ use {
 
 #[derive(From)]
 pub enum Error {
-    Compile(String),
+    Compile {
+        msg: String,
+        line: u32,
+    },
     CompileRepl,
     Decode(&'static str),
     #[from]
@@ -40,10 +43,11 @@ impl From<ParseError<u32, Token, Error>> for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Compile(msg) => write!(f, "compile error: {}", msg),
+            Error::Compile { msg, line } => write!(f, "[line {}] Error: {}", line, msg),
             Error::CompileRepl => write!(f, "invoking with --compile requires an input script"),
             Error::Decode(ty) => write!(f, "invalid {} in bytecode", ty),
             Error::Io(e) => write!(f, "I/O error: {}", e),
+            Error::Parse(ParseError::User { error }) => error.fmt(f),
             Error::Parse(e) => write!(f, "parse error: {}", e),
             Error::ParseFloat(e) => e.fmt(f),
             Error::Runtime { msg, call_stack } => {
@@ -67,7 +71,7 @@ impl wheel::CustomExit for Error {
     fn exit(self, _: &'static str) -> ! {
         eprintln!("{}", self);
         std::process::exit(match self {
-            Error::Compile(_) | Error::Parse(_) => 65,
+            Error::Compile { .. } | Error::Parse(_) => 65,
             Error::Runtime { .. } => 70,
             Error::Io(_) => 74,
             _ => 1,

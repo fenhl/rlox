@@ -2,7 +2,8 @@ pub(crate) enum Stmt {
     //TODO class
     Fun {
         name: String,
-        params: Vec<String>,
+        name_line: u32,
+        params: Vec<(u32, String)>,
         body: Vec<Stmt>,
         last_line: u32,
     },
@@ -48,9 +49,21 @@ impl Stmt {
 }
 
 pub(crate) enum Expr {
-    Assign(Option<Box<Expr>>, String, Box<Expr>),
-    Binary(Box<Expr>, BinaryOp, Box<Expr>),
-    Unary(UnaryOp, Box<Expr>),
+    Assign {
+        rcpt: Option<Box<Expr>>,
+        name: String,
+        name_line: u32,
+        value: Box<Expr>,
+    },
+    Binary {
+        lhs: Box<Expr>,
+        op: BinaryOp,
+        rhs: Box<Expr>,
+    },
+    Unary {
+        op: UnaryOp,
+        inner: Box<Expr>,
+    },
     Call {
         rcpt: Box<Expr>,
         args: Vec<Expr>,
@@ -87,7 +100,7 @@ impl Expr {
         match self {
             Expr::True { line } | Expr::False { line } | Expr::Nil { line } | Expr::Number { line, .. } | Expr::Variable { line, .. } => *line,
             Expr::Call { last_line, .. } | Expr::String { last_line, .. } => *last_line,
-            Expr::Assign(_, _, inner) | Expr::Binary(_, _, inner) | Expr::Unary(_, inner) => inner.last_line(),
+            Expr::Assign { value: inner, .. } | Expr::Binary { rhs: inner, .. } | Expr::Unary { inner, .. } => inner.last_line(),
         }
     }
 }
